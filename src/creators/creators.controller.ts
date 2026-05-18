@@ -17,26 +17,26 @@ export class CreatorsService {
   }
 
   async findByAddress(address: string) {
-    const creator = await this.prisma.creator.findUnique({ where: { address } });
+    const creator = await this.prisma.creator.findFirst({ where: { address } });
     if (!creator) throw new NotFoundException('Creator not found');
     return creator;
   }
 
   async register(userId: string, dto: CreateCreatorDto, address: string) {
-    return this.prisma.creator.upsert({
-      where: { address },
-      update: dto,
-      create: { ...dto, address, userId },
-    });
+    return this.prisma.creator.create({ data: { ...dto, address, userId } });
   }
 
   async update(address: string, dto: UpdateCreatorDto) {
-    return this.prisma.creator.update({ where: { address }, data: dto });
+    const creator = await this.prisma.creator.findFirst({ where: { address } });
+    if (!creator) throw new NotFoundException('Creator not found');
+    return this.prisma.creator.update({ where: { id: creator.id }, data: dto });
   }
 
   async getEarnings(address: string) {
+    const creator = await this.prisma.creator.findFirst({ where: { address } });
+    if (!creator) throw new NotFoundException('Creator not found');
     const passes = await this.prisma.pass.findMany({
-      where: { tier: { creator: { address } } },
+      where: { tier: { creatorId: creator.id } },
       include: { tier: true },
     });
     const total = passes.reduce((sum, p) => sum + Number(p.tier.price), 0);
