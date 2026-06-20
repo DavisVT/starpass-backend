@@ -7,6 +7,7 @@ import { TiersModule } from './tiers/tiers.module';
 import { PassesModule } from './passes/passes.module';
 import { IndexerModule } from './indexer/indexer.module';
 import { StellarModule } from './stellar/stellar.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { StellarModule } from './stellar/stellar.module';
     PassesModule,
     IndexerModule,
     StellarModule,
+    WebhooksModule,
   ],
 })
 export class AppModule {}

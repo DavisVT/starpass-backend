@@ -1,9 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 
 @Injectable()
 export class PassesService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(PassesService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private webhooksService: WebhooksService,
+  ) {}
 
   /**
    * Check if a fan has a valid pass for a specific tier
@@ -144,6 +150,11 @@ export class PassesService {
 
     if (!creator || !tier) return null;
 
+    // Check if the pass already exists
+    const existingPass = await this.prisma.pass.findUnique({
+      where: { onChainId: data.onChainId },
+    });
+
     // Upsert fan
     const fan = await this.prisma.fan.upsert({
       where: { stellarAddress: data.fanAddress },
@@ -159,7 +170,7 @@ export class PassesService {
       },
     });
 
-    return this.prisma.pass.upsert({
+    const pass = await this.prisma.pass.upsert({
       where: { onChainId: data.onChainId },
       update: {
         expiresAt: data.expiresAt,
@@ -175,5 +186,14 @@ export class PassesService {
         syncedAt: new Date(),
       },
     });
+
+    if (!existingPass) {
+      // Trigger webhook delivery asynchronously without blocking
+      this.webhooksService.deliverPassPurchaseWebhook(creator.id, pass).catch((err) => {
+        this.logger.error(`Error triggering webhook: ${err.message}`);
+      });
+    }
+
+    return pass;
   }
 }

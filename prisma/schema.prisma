@@ -49,7 +49,20 @@ model Creator {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tiers          Tier[]
   passes         Pass[]
+  webhooks       WebhookConfig[]
   @@map("creators")
+}
+
+model WebhookConfig {
+  id        String   @id @default(uuid())
+  creatorId String   @map("creator_id")
+  url       String
+  secret    String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  creator   Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  @@map("webhook_configs")
 }
 
 model Fan {

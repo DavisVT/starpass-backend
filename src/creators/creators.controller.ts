@@ -1,14 +1,19 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CreatorsService } from './creators.service';
 import { CreateCreatorDto } from './dto/create-creator.dto';
 import { UpdateCreatorDto } from './dto/update-creator.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { WebhooksService } from '../webhooks/webhooks.service';
+import { RegisterWebhookDto } from '../webhooks/dto/register-webhook.dto';
 
 @ApiTags('creators')
 @Controller('creators')
 export class CreatorsController {
-  constructor(private creatorsService: CreatorsService) {}
+  constructor(
+    private creatorsService: CreatorsService,
+    private webhooksService: WebhooksService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List all creators' })
@@ -44,5 +49,27 @@ export class CreatorsController {
   @ApiOperation({ summary: 'Get creator earnings summary' })
   getEarnings(@Param('address') address: string) {
     return this.creatorsService.getEarnings(address);
+  }
+
+  @Post(':id/webhooks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Register a webhook URL' })
+  registerWebhook(
+    @Param('id') id: string,
+    @Body() dto: RegisterWebhookDto,
+  ) {
+    return this.webhooksService.register(id, dto.url, dto.secret);
+  }
+
+  @Delete(':id/webhooks/:webhookId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove a webhook' })
+  removeWebhook(
+    @Param('id') id: string,
+    @Param('webhookId') webhookId: string,
+  ) {
+    return this.webhooksService.remove(id, webhookId);
   }
 }
