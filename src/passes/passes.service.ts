@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { ListPassesDto } from './dto/list-passes.dto';
 
 @Injectable()
 export class PassesService {
