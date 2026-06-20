@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { ListPassesDto } from './dto/list-passes.dto';
 
 @Injectable()
 export class PassesService {
@@ -155,5 +156,60 @@ export class PassesService {
         syncedAt: new Date(),
       },
     });
+  }
+
+  /**
+   * Find all passes with filtering and pagination
+   */
+  async findAll(filters: ListPassesDto) {
+    const { fan, tier_id, active, expired, page = 1, limit = 20 } = filters;
+    const now = new Date();
+
+    const where: any = {};
+
+    if (fan) {
+      where.fan = {
+        stellarAddress: fan,
+      };
+    }
+
+    if (tier_id) {
+      where.tierId = tier_id;
+    }
+
+    if (active !== undefined) {
+      where.active = active;
+    }
+
+    if (expired !== undefined) {
+      where.expiresAt = expired ? { lte: now } : { gt: now };
+    }
+
+    const skip = (page - 1) * limit;
+    const take = limit;
+
+    const [data, total] = await Promise.all([
+      this.prisma.pass.findMany({
+        where,
+        skip,
+        take,
+        include: {
+          tier: true,
+          creator: true,
+          fan: true,
+        },
+        orderBy: {
+          purchasedAt: 'desc',
+        },
+      }),
+      this.prisma.pass.count({ where }),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+    };
   }
 }
