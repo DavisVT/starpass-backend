@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException } from '@nestjs/common';
 import { CreatorsController } from './creators.controller';
 import { CreatorsService } from './creators.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
@@ -7,9 +8,12 @@ import { RegisterWebhookDto } from '../webhooks/dto/register-webhook.dto';
 
 describe('CreatorsController', () => {
   let controller: CreatorsController;
+  let creatorsService: CreatorsService;
   let webhooksService: WebhooksService;
 
-  const mockCreatorsService = {};
+  const mockCreatorsService = {
+    findAll: jest.fn(),
+  };
   const mockWebhooksService = {
     register: jest.fn(),
     remove: jest.fn(),
@@ -34,11 +38,32 @@ describe('CreatorsController', () => {
       .compile();
 
     controller = module.get<CreatorsController>(CreatorsController);
+    creatorsService = module.get<CreatorsService>(CreatorsService);
     webhooksService = module.get<WebhooksService>(WebhooksService);
   });
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  describe('findAll', () => {
+    const mockResult = { data: [], total: 0, page: 1, limit: 10 };
+
+    it('should use default page=1 and limit=10', async () => {
+      mockCreatorsService.findAll.mockResolvedValue(mockResult);
+      await controller.findAll(1, 10);
+      expect(creatorsService.findAll).toHaveBeenCalledWith(1, 10);
+    });
+
+    it('should pass custom page and limit', async () => {
+      mockCreatorsService.findAll.mockResolvedValue({ data: [], total: 0, page: 2, limit: 5 });
+      await controller.findAll(2, 5);
+      expect(creatorsService.findAll).toHaveBeenCalledWith(2, 5);
+    });
+
+    it('should throw BadRequestException when limit exceeds 50', () => {
+      expect(() => controller.findAll(1, 51)).toThrow(BadRequestException);
+    });
   });
 
   describe('registerWebhook', () => {

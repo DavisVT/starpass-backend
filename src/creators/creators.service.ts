@@ -20,7 +20,7 @@ export class CreatorsService {
       this.prisma.creator.findMany({ skip, take: limit, orderBy: { createdAt: 'desc' } }),
       this.prisma.creator.count(),
     ]);
-    return { creators, total, page, limit };
+    return { data: creators, total, page, limit };
   }
 
   /**
