@@ -182,6 +182,7 @@ export class PassesService {
     fanAddress: string;
     purchasedAt: Date;
     expiresAt: Date;
+    txHash?: string | null;
   }) {
     const [creator, tier] = await Promise.all([
       this.prisma.creator.findUnique({ where: { stellarAddress: data.creatorAddress } }),
@@ -219,6 +220,7 @@ export class PassesService {
       where: { onChainId: data.onChainId },
       update: {
         expiresAt: data.expiresAt,
+        txHash: data.txHash ?? undefined,
         syncedAt: new Date(),
       },
       create: {
@@ -228,6 +230,7 @@ export class PassesService {
         fanId: fan.id,
         purchasedAt: data.purchasedAt,
         expiresAt: data.expiresAt,
+        txHash: data.txHash,
         syncedAt: new Date(),
       },
     });

@@ -145,6 +145,21 @@ Get pass count for a creator. Requires JWT.
 { "total": 150, "active": 87 }
 ```
 
+### GET /passes/:id/receipt 🔒
+Get a purchase receipt for a pass. Requires JWT and only the pass owner can view it.
+
+**Response:**
+```json
+{
+  "pass": { "id": "uuid", "txHash": "transaction-hash" },
+  "tier": { "id": "uuid", "priceUsdc": "10.00" },
+  "creator": { "id": "uuid", "stellarAddress": "GCREATOR..." },
+  "purchasedAt": "2026-01-01T00:00:00.000Z",
+  "amount": "10.00",
+  "txHash": "transaction-hash"
+}
+```
+
 ---
 
 ## Fan Endpoints

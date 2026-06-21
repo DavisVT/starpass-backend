@@ -4,6 +4,7 @@ import { PassesService } from './passes.service';
 import { PrismaService } from '../common/prisma.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { EmailService } from '../notifications/email.service';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 
 describe('PassesService', () => {
   let service: PassesService;
@@ -18,6 +19,7 @@ describe('PassesService', () => {
       findFirst: jest.fn(),
     },
     fan: {
+      findUnique: jest.fn(),
       upsert: jest.fn(),
     },
     pass: {
@@ -71,6 +73,7 @@ describe('PassesService', () => {
       fanAddress: 'GB_FAN',
       purchasedAt: new Date(),
       expiresAt: new Date(Date.now() + 86400000),
+      txHash: 'tx-hash',
     };
 
     const mockCreator = { id: 'creator-uuid', stellarAddress: 'GB_CREATOR' };
@@ -94,6 +97,13 @@ describe('PassesService', () => {
         where: { onChainId: mockData.onChainId },
       });
       expect(prisma.pass.upsert).toHaveBeenCalled();
+      expect(prisma.pass.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            txHash: mockData.txHash,
+          }),
+        }),
+      );
       expect(webhooksService.deliverPassPurchaseWebhook).toHaveBeenCalledWith(
         mockCreator.id,
         mockPass

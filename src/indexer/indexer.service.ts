@@ -156,6 +156,7 @@ export class IndexerService implements OnModuleInit {
       fanAddress: fanAddress.toString(),
       purchasedAt,
       expiresAt: expiryDate,
+      txHash: event.txHash ?? event.transactionHash ?? event.tx_hash ?? null,
     });
   }
 
