@@ -1,11 +1,12 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, Delete, BadRequestException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, Delete, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { CreatorsService } from './creators.service';
 import { CreateCreatorDto } from './dto/create-creator.dto';
 import { UpdateCreatorDto } from './dto/update-creator.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { RegisterWebhookDto } from '../webhooks/dto/register-webhook.dto';
+import { CreatorAnalyticsDto } from './creator-analytics.dto';
 
 @ApiTags('creators')
 @Controller('creators')
@@ -63,6 +64,39 @@ export class CreatorsController {
   @ApiResponse({ status: 404, description: 'Creator not found' })
   getEarnings(@Param('address') address: string) {
     return this.creatorsService.getEarnings(address);
+  }
+
+  @Get(':id/revenue')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get creator revenue analytics' })
+  @ApiResponse({ status: 200, description: 'Return creator revenue analytics' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  getRevenue(@Param('id') id: string, @Request() req: any) {
+    if (req.user?.sub !== id) {
+      throw new ForbiddenException('You are not authorized to access this creator revenue summary');
+    }
+
+    return this.creatorsService.getRevenue(id);
+  }
+
+  @Get(':id/analytics')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get creator subscription analytics' })
+  @ApiQuery({ name: 'period', required: false, enum: ['30d', '90d', '1y'] })
+  @ApiResponse({ status: 200, type: CreatorAnalyticsDto, description: 'Return creator subscription analytics' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  getAnalytics(@Param('id') id: string, @Query('period') period = '30d', @Request() req: any) {
+    if (req.user?.sub !== id) {
+      throw new ForbiddenException('You are not authorized to access this creator analytics summary');
+    }
+
+    return this.creatorsService.getAnalytics(id, period);
   }
 
   @Post(':id/webhooks')

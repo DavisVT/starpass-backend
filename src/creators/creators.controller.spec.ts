@@ -13,6 +13,7 @@ describe('CreatorsController', () => {
 
   const mockCreatorsService = {
     findAll: jest.fn(),
+    getRevenue: jest.fn(),
   };
   const mockWebhooksService = {
     register: jest.fn(),
@@ -81,6 +82,32 @@ describe('CreatorsController', () => {
         dto.url,
         dto.secret
       );
+    });
+  });
+
+  describe('getRevenue', () => {
+    it('should return revenue analytics for the authenticated creator', async () => {
+      const creatorId = 'user-123';
+      const result = {
+        totalRevenue: 15450.0,
+        totalPasses: 342,
+        pendingBalance: 1200.5,
+        topTiers: [
+          { id: 'tier-123', name: 'VIP Access', revenue: 8500.0 },
+        ],
+      };
+      mockCreatorsService.getRevenue.mockResolvedValue(result);
+
+      const response = await controller.getRevenue(creatorId, { user: { sub: creatorId } });
+
+      expect(response).toEqual(result);
+      expect(creatorsService.getRevenue).toHaveBeenCalledWith(creatorId);
+    });
+
+    it('should throw ForbiddenException when authenticated user does not match path id', async () => {
+      await expect(
+        controller.getRevenue('user-123', { user: { sub: 'user-456' } }),
+      ).rejects.toThrowError('You are not authorized to access this creator revenue summary');
     });
   });
 
