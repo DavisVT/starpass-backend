@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { ListPassesDto } from './dto/list-passes.dto';
@@ -128,6 +128,49 @@ export class PassesService {
   }
 
   /**
+   * Get a purchase receipt for a specific pass.
+   */
+  async getReceipt(passId: string, fanAddress: string) {
+    const pass = await this.prisma.pass.findUnique({
+      where: { id: passId },
+      include: {
+        tier: true,
+        creator: true,
+        fan: true,
+      },
+    });
+
+    if (!pass) {
+      throw new NotFoundException('Pass not found');
+    }
+
+    if (pass.fan.stellarAddress !== fanAddress) {
+      throw new ForbiddenException('Only the pass owner can view this receipt');
+    }
+
+    return {
+      pass: {
+        id: pass.id,
+        onChainId: pass.onChainId,
+        tierId: pass.tierId,
+        creatorId: pass.creatorId,
+        fanId: pass.fanId,
+        purchasedAt: pass.purchasedAt,
+        expiresAt: pass.expiresAt,
+        txHash: pass.txHash ?? null,
+        active: pass.active,
+        syncedAt: pass.syncedAt,
+        createdAt: pass.createdAt,
+      },
+      tier: pass.tier,
+      creator: pass.creator,
+      purchasedAt: pass.purchasedAt,
+      amount: pass.tier.priceUsdc,
+      txHash: pass.txHash ?? null,
+    };
+  }
+
+  /**
    * Upsert a pass from on-chain event data (called by indexer)
    * 
    * @param data The event data containing pass details from the blockchain.
@@ -140,6 +183,7 @@ export class PassesService {
     fanAddress: string;
     purchasedAt: Date;
     expiresAt: Date;
+    txHash?: string | null;
   }) {
     const [creator, tier] = await Promise.all([
       this.prisma.creator.findUnique({ where: { stellarAddress: data.creatorAddress } }),
@@ -177,6 +221,7 @@ export class PassesService {
       where: { onChainId: data.onChainId },
       update: {
         expiresAt: data.expiresAt,
+        txHash: data.txHash ?? undefined,
         syncedAt: new Date(),
       },
       create: {
@@ -186,6 +231,7 @@ export class PassesService {
         fanId: fan.id,
         purchasedAt: data.purchasedAt,
         expiresAt: data.expiresAt,
+        txHash: data.txHash,
         syncedAt: new Date(),
       },
     });

@@ -19,6 +19,7 @@ describe('PassesController', () => {
     hasAnyValidPass: jest.fn(),
     findByFan: jest.fn(),
     getCreatorPassCount: jest.fn(),
+    getReceipt: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -63,6 +64,27 @@ describe('PassesController', () => {
         page: 2,
         limit: 10,
       });
+    });
+  });
+
+  describe('getReceipt', () => {
+    it('should call PassesService.getReceipt with pass id and authenticated address', async () => {
+      const receipt = {
+        pass: { id: 'pass-uuid' },
+        tier: { id: 'tier-uuid' },
+        creator: { id: 'creator-uuid' },
+        purchasedAt: new Date('2026-01-01T00:00:00Z'),
+        amount: '10.00',
+        txHash: 'tx-hash',
+      };
+      mockPassesService.getReceipt.mockResolvedValue(receipt);
+
+      const result = await controller.getReceipt('pass-uuid', {
+        user: { address: 'GB_FAN' },
+      });
+
+      expect(service.getReceipt).toHaveBeenCalledWith('pass-uuid', 'GB_FAN');
+      expect(result).toEqual(receipt);
     });
   });
 });
