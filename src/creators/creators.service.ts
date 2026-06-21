@@ -88,4 +88,49 @@ export class CreatorsService {
     const total = passes.reduce((sum, p) => sum + Number(p.tier.priceUsdc), 0);
     return { stellarAddress, totalEarnings: total, passCount: passes.length };
   }
+
+  async getRevenue(ownerUserId: string) {
+    const creator = await this.prisma.creator.findUnique({ where: { userId: ownerUserId } });
+    if (!creator) throw new NotFoundException('Creator not found');
+
+    const passes = await this.prisma.pass.findMany({
+      where: { creatorId: creator.id },
+      include: { tier: true },
+    });
+
+    const revenueByTier = new Map<string, { id: string; name: string; revenue: number }>();
+    let totalRevenue = 0;
+
+    for (const pass of passes) {
+      const price = Number(pass.tier.priceUsdc);
+      totalRevenue += price;
+
+      const tierSummary = revenueByTier.get(pass.tier.id);
+      if (tierSummary) {
+        tierSummary.revenue += price;
+      } else {
+        revenueByTier.set(pass.tier.id, {
+          id: pass.tier.id,
+          name: pass.tier.name,
+          revenue: price,
+        });
+      }
+    }
+
+    const topTiers = Array.from(revenueByTier.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 3)
+      .map((tier) => ({
+        id: tier.id,
+        name: tier.name,
+        revenue: Number(tier.revenue.toFixed(2)),
+      }));
+
+    return {
+      totalRevenue: Number(totalRevenue.toFixed(2)),
+      totalPasses: passes.length,
+      pendingBalance: Number(creator.totalEarned ?? 0),
+      topTiers,
+    };
+  }
 }
