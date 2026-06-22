@@ -94,8 +94,22 @@ model Tier {
   updatedAt    DateTime @updatedAt @map("updated_at")
   creator      Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   passes       Pass[]
+  waitlist     WaitlistEntry[]
   @@unique([creatorId, onChainId])
   @@map("tiers")
+}
+
+model WaitlistEntry {
+  id           String   @id @default(uuid())
+  tierId       String   @map("tier_id")
+  fanAddress   String   @map("fan_address")
+  joinedAt      DateTime @default(now()) @map("joined_at")
+  notified     Boolean  @default(false)
+  tier          Tier     @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  @@unique([tierId, fanAddress])
+  @@map("waitlist_entries")
 }
 
 model Pass {
