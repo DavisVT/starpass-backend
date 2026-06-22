@@ -1,15 +1,22 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma.service';
 import { StellarService } from '../stellar/stellar.service';
 import { TiersService } from '../tiers/tiers.service';
 import { PassesService } from '../passes/passes.service';
+import { ReindexDto, ReindexJobStatusDto } from './dto/reindex.dto';
+import { randomUUID } from 'crypto';
+
+const MAX_LEDGER_RANGE = 10000;
 
 @Injectable()
 export class IndexerService implements OnModuleInit {
   private readonly logger = new Logger(IndexerService.name);
   private isRunning = false;
   private intervalMs: number;
+
+  // In-memory job storage (for async job tracking)
+  private reindexJobs: Map<string, ReindexJobStatusDto> = new Map();
 
   constructor(
     private prisma: PrismaService,
@@ -174,5 +181,106 @@ export class IndexerService implements OnModuleInit {
       where: { id: 'singleton' },
       data: { lastLedger: ledger },
     });
+  }
+
+  /**
+   * Start an asynchronous reindex job for a specific ledger range.
+   * Validates the range and returns a job ID immediately.
+   *
+   * @param dto The reindex request containing fromLedger and toLedger
+   * @returns An object with jobId and status
+   */
+  async startReindex(dto: ReindexDto): Promise<{ jobId: string }> {
+    const { fromLedger, toLedger } = dto;
+
+    // Validate range
+    if (toLedger < fromLedger) {
+      throw new BadRequestException('toLedger must be greater than or equal to fromLedger');
+    }
+
+    const range = toLedger - fromLedger + 1;
+    if (range > MAX_LEDGER_RANGE) {
+      throw new BadRequestException(
+        `Ledger range exceeds maximum of ${MAX_LEDGER_RANGE}. Requested range: ${range}`,
+      );
+    }
+
+    // Create job
+    const jobId = randomUUID();
+    const job: ReindexJobStatusDto = {
+      jobId,
+      status: 'pending',
+      fromLedger,
+      toLedger,
+      eventsProcessed: 0,
+      createdAt: new Date(),
+    };
+
+    this.reindexJobs.set(jobId, job);
+
+    // Start processing asynchronously (fire and forget)
+    this.executeReindexJob(jobId).catch((err) => {
+      this.logger.error(`Reindex job ${jobId} failed: ${err.message}`);
+    });
+
+    return { jobId };
+  }
+
+  /**
+   * Execute the reindex job asynchronously.
+   * Processes events in the specified ledger range idempotently.
+   */
+  private async executeReindexJob(jobId: string): Promise<void> {
+    const job = this.reindexJobs.get(jobId);
+    if (!job) return;
+
+    job.status = 'running';
+
+    try {
+      const { fromLedger, toLedger } = job;
+      let eventsProcessed = 0;
+
+      // Process events from the specified range
+      // We iterate through the range and fetch events for each ledger
+      for (let ledger = fromLedger!; ledger <= toLedger!; ledger++) {
+        try {
+          const events = await this.stellar.getContractEvents(ledger);
+
+          for (const event of events) {
+            // Process each event - the handlers use upsert, ensuring idempotency
+            await this.processEvent(event);
+            eventsProcessed++;
+          }
+        } catch (error) {
+          this.logger.warn(`Error processing ledger ${ledger}: ${error.message}`);
+          // Continue with next ledger
+        }
+      }
+
+      job.status = 'completed';
+      job.eventsProcessed = eventsProcessed;
+      job.completedAt = new Date();
+
+      this.logger.log(`Reindex job ${jobId} completed: ${eventsProcessed} events processed`);
+    } catch (error) {
+      job.status = 'failed';
+      job.error = error.message;
+      job.completedAt = new Date();
+      this.logger.error(`Reindex job ${jobId} failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get the status of a reindex job.
+   *
+   * @param jobId The job ID to query
+   * @returns The job status or throws NotFoundException
+   */
+  getReindexJobStatus(jobId: string): ReindexJobStatusDto {
+    const job = this.reindexJobs.get(jobId);
+    if (!job) {
+      throw new BadRequestException(`Reindex job ${jobId} not found`);
+    }
+    return job;
   }
 }

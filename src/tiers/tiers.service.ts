@@ -1,11 +1,25 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { createHmac } from 'crypto';
-import { ConfigService } from '@nestjs/config';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { EmailService } from '../notifications/email.service';
 import { CreateTierDto } from './dto/create-tier.dto';
 
 const UNLOCK_TTL_SECONDS = 15 * 60; // 15 minutes
+
+export interface CreateTierDto {
+  onChainId: number;
+  name: string;
+  description?: string;
+  priceUsdc: string;
+  durationDays: number;
+  maxSupply?: number;
+  active?: boolean;
+}
 
 @Injectable()
 export class TiersService {

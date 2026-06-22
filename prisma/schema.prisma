@@ -55,6 +55,7 @@ model Creator {
   blocks         Block[]
   webhooks       WebhookConfig[]
   payouts        Payout[]
+  earningsRecords EarningsRecord[]
   @@map("creators")
 }
 
@@ -100,6 +101,7 @@ model Fan {
   lastExportRequestedAt DateTime? @map("last_export_requested_at")
   user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   passes              Pass[]
+  earningsRecords     EarningsRecord[]
   @@map("fans")
 }
 
@@ -120,6 +122,7 @@ model Tier {
   creator      Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   passes       Pass[]
   waitlist     WaitlistEntry[]
+  earningsRecords EarningsRecord[]
   @@unique([creatorId, onChainId])
   @@map("tiers")
 }
