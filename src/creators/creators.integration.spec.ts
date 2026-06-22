@@ -28,18 +28,23 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
     onModuleDestroy: jest.fn(),
   };
 
+  const mockPrismaService = {
+    onModuleInit: jest.fn(),
+    onModuleDestroy: jest.fn(),
+  };
+
   const successJwtGuard = {
     canActivate: (context: any) => {
-      const request = context.switchToHttp().getRequest();
-      request.user = { sub: 'user-123' };
+      const req = context.switchToHttp().getRequest();
+      req.user = { sub: 'user-123' };
       return true;
     },
   };
 
   const mismatchJwtGuard = {
     canActivate: (context: any) => {
-      const request = context.switchToHttp().getRequest();
-      request.user = { sub: 'user-456' };
+      const req = context.switchToHttp().getRequest();
+      req.user = { sub: 'user-456' };
       return true;
     },
   };
@@ -61,7 +66,9 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   beforeEach(() => {
@@ -78,7 +85,6 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
   });
 
   it('should return 403 when the authenticated user does not own the creator', async () => {
-    // Rebuild the application with a guard that returns a different authenticated user
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [CreatorsModule],
     })
@@ -93,9 +99,7 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
     const localApp = moduleFixture.createNestApplication();
     await localApp.init();
 
-    await request(localApp.getHttpServer())
-      .get('/creators/user-123/revenue')
-      .expect(403);
+    await request(localApp.getHttpServer()).get('/creators/user-123/revenue').expect(403);
 
     await localApp.close();
   });

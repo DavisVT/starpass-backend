@@ -9,8 +9,8 @@ class SubscriberGrowthPointDto {
 }
 
 export class CreatorAnalyticsDto {
-  @ApiProperty({ type: () => [SubscriberGrowthPointDto] })
-  subscriberGrowth: Array<{ date: string; count: number }>;
+  @ApiProperty({ type: [SubscriberGrowthPointDto] })
+  subscriberGrowth: SubscriberGrowthPointDto[];
 
   @ApiProperty({ description: 'Churn rate as a percentage' })
   churnRate: number;

@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@ne
 import { CreatorsService } from './creators.service';
 import { CreateCreatorDto } from './dto/create-creator.dto';
 import { UpdateCreatorDto } from './dto/update-creator.dto';
+import { ListPayoutsDto } from './dto/list-payouts.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { RegisterWebhookDto } from '../webhooks/dto/register-webhook.dto';
@@ -154,5 +155,21 @@ export class CreatorsController {
     @Param('webhookId') webhookId: string,
   ) {
     return this.webhooksService.remove(id, webhookId);
+  }
+
+  @Get(':id/payouts')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get payout history for a creator (creator only)' })
+  @ApiResponse({ status: 200, description: 'Paginated list of payouts' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden — only the creator can view their payouts' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  getPayouts(
+    @Param('id') id: string,
+    @Query() query: ListPayoutsDto,
+    @Request() req: any,
+  ) {
+    return this.creatorsService.getPayouts(id, req.user.sub, query);
   }
 }

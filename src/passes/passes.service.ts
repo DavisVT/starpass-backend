@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { ListPassesDto } from './dto/list-passes.dto';
 import { EmailService } from '../notifications/email.service';
+import { TiersService } from '../tiers/tiers.service';
 
 @Injectable()
 export class PassesService {
@@ -12,6 +13,7 @@ export class PassesService {
     private prisma: PrismaService,
     private webhooksService: WebhooksService,
     private emailService: EmailService,
+    private tiersService: TiersService,
   ) {}
 
   /**
@@ -154,6 +156,11 @@ export class PassesService {
       throw new ForbiddenException('Only the pass owner can view this receipt');
     }
 
+    const feeBps = await this.adminConfigService.getCurrentFeeBps();
+    const priceUsdc = parseFloat(pass.tier.priceUsdc.toString());
+    const feeAmount = parseFloat(((priceUsdc * feeBps) / 10000).toFixed(6));
+    const creatorAmount = parseFloat((priceUsdc - feeAmount).toFixed(6));
+
     return {
       pass: {
         id: pass.id,
@@ -165,6 +172,9 @@ export class PassesService {
       creator: pass.creator,
       purchasedAt: pass.purchasedAt,
       amount: pass.tier.priceUsdc.toString(),
+      feeBps,
+      feeAmount: feeAmount.toString(),
+      creatorAmount: creatorAmount.toString(),
       txHash: pass.txHash ?? null,
     };
   }

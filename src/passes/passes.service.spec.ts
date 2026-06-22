@@ -4,6 +4,7 @@ import { PassesService } from './passes.service';
 import { PrismaService } from '../common/prisma.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { EmailService } from '../notifications/email.service';
+import { AdminConfigService } from '../admin/admin-config.service';
 
 describe('PassesService', () => {
   let service: PassesService;
@@ -41,22 +42,18 @@ describe('PassesService', () => {
     sendPassPurchaseEmail: jest.fn().mockResolvedValue(undefined),
   };
 
+  const mockAdminConfigService = {
+    getCurrentFeeBps: jest.fn().mockResolvedValue(250),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PassesService,
-        {
-          provide: PrismaService,
-          useValue: mockPrismaService,
-        },
-        {
-          provide: WebhooksService,
-          useValue: mockWebhooksService,
-        },
-        {
-          provide: EmailService,
-          useValue: mockEmailService,
-        },
+        { provide: PrismaService, useValue: mockPrismaService },
+        { provide: WebhooksService, useValue: mockWebhooksService },
+        { provide: EmailService, useValue: mockEmailService },
+        { provide: AdminConfigService, useValue: mockAdminConfigService },
       ],
     }).compile();
 
@@ -65,6 +62,8 @@ describe('PassesService', () => {
     webhooksService = module.get<WebhooksService>(WebhooksService);
 
     jest.clearAllMocks();
+    // Reset default fee mock after clearAllMocks
+    mockAdminConfigService.getCurrentFeeBps.mockResolvedValue(250);
   });
 
   describe('upsertFromChain', () => {
@@ -109,7 +108,7 @@ describe('PassesService', () => {
       );
       expect(webhooksService.deliverPassPurchaseWebhook).toHaveBeenCalledWith(
         mockCreator.id,
-        mockPass
+        mockPass,
       );
       expect(result).toEqual(mockPass);
     });
@@ -177,32 +176,50 @@ describe('PassesService', () => {
       },
     };
 
-    it('should return purchase receipt details for the pass owner', async () => {
+    it('should return purchase receipt with fee breakdown for the pass owner', async () => {
       mockPrismaService.pass.findUnique.mockResolvedValue(mockPassReceipt);
+      // 250 bps = 2.5% of 12.50 = 0.3125
+      mockAdminConfigService.getCurrentFeeBps.mockResolvedValue(250);
 
       const result = await service.getReceipt('pass-uuid', 'GB_FAN');
 
       expect(prisma.pass.findUnique).toHaveBeenCalledWith({
         where: { id: 'pass-uuid' },
-        include: {
-          tier: true,
-          creator: true,
-          fan: true,
-        },
+        include: { tier: true, creator: true, fan: true },
       });
       expect(result).toEqual({
-        pass: {
-          id: 'pass-uuid',
-          onChainId: '42',
-          active: true,
-          expiresAt,
-        },
+        pass: { id: 'pass-uuid', onChainId: '42', active: true, expiresAt },
         tier: mockPassReceipt.tier,
         creator: mockPassReceipt.creator,
         purchasedAt,
         amount: '12.50',
+        feeBps: 250,
+        feeAmount: '0.3125',
+        creatorAmount: '12.1875',
         txHash: 'stellar-tx-hash',
       });
+    });
+
+    it('should calculate zero fee when feeBps is 0', async () => {
+      mockPrismaService.pass.findUnique.mockResolvedValue(mockPassReceipt);
+      mockAdminConfigService.getCurrentFeeBps.mockResolvedValue(0);
+
+      const result = await service.getReceipt('pass-uuid', 'GB_FAN');
+
+      expect(result.feeBps).toBe(0);
+      expect(result.feeAmount).toBe('0');
+      expect(result.creatorAmount).toBe('12.5');
+    });
+
+    it('should calculate max fee correctly at 1000 bps (10%)', async () => {
+      mockPrismaService.pass.findUnique.mockResolvedValue(mockPassReceipt);
+      mockAdminConfigService.getCurrentFeeBps.mockResolvedValue(1000);
+
+      const result = await service.getReceipt('pass-uuid', 'GB_FAN');
+
+      expect(result.feeBps).toBe(1000);
+      expect(result.feeAmount).toBe('1.25');
+      expect(result.creatorAmount).toBe('11.25');
     });
 
     it('should reject receipt access for a different fan', async () => {

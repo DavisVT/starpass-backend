@@ -37,8 +37,8 @@ describe('Creator Analytics Endpoint', () => {
 
   const authGuard = {
     canActivate: (context: any) => {
-      const request = context.switchToHttp().getRequest();
-      request.user = { sub: 'user-123' };
+      const req = context.switchToHttp().getRequest();
+      req.user = { sub: 'user-123' };
       return true;
     },
   };
@@ -121,8 +121,8 @@ describe('Creator Analytics Endpoint', () => {
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: any) => {
-          const request = context.switchToHttp().getRequest();
-          request.user = { sub: 'user-456' };
+          const req = context.switchToHttp().getRequest();
+          req.user = { sub: 'user-456' };
           return true;
         },
       })
