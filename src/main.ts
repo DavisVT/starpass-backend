@@ -43,6 +43,9 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`StarPass API running on port ${port}`);
   console.log(`Swagger docs: http://localhost:${port}/api/docs`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`GraphQL playground: http://localhost:${port}/graphql`);
+  }
 }
 
 bootstrap();

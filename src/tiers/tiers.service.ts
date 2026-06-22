@@ -3,6 +3,7 @@ import { createHmac } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma.service';
 import { EmailService } from '../notifications/email.service';
+import { CreateTierDto } from './dto/create-tier.dto';
 
 const UNLOCK_TTL_SECONDS = 15 * 60; // 15 minutes
 
