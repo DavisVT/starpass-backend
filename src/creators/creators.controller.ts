@@ -9,7 +9,7 @@ import { RegisterWebhookDto } from '../webhooks/dto/register-webhook.dto';
 import { CreatorAnalyticsDto } from './creator-analytics.dto';
 
 @ApiTags('creators')
-@Controller('creators')
+@Controller({ path: 'creators', version: '1' })
 export class CreatorsController {
   constructor(
     private creatorsService: CreatorsService,

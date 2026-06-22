@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FansService } from './fans.service';
 
 @ApiTags('fans')
-@Controller('fans')
+@Controller({ path: 'fans', version: '1' })
 export class FansController {
   constructor(private fansService: FansService) {}
 

@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { validateConfig } from './common/config.validation';
@@ -9,6 +9,9 @@ validateConfig();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // URI versioning — all routes prefixed with /v{n}/
+  app.enableVersioning({ type: VersioningType.URI });
 
   // Global validation pipe
   app.useGlobalPipes(
@@ -31,6 +34,7 @@ async function bootstrap() {
       .setTitle('StarPass API')
       .setDescription('Backend API for the StarPass creator membership platform on Stellar')
       .setVersion('1.0')
+      .addServer('/v1', 'Version 1')
       .addBearerAuth()
       .build();
     const document = SwaggerModule.createDocument(app, config);

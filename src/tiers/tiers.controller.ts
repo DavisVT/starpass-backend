@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { TiersService } from './tiers.service';
 
 @ApiTags('tiers')
-@Controller('tiers')
+@Controller({ path: 'tiers', version: '1' })
 export class TiersController {
   constructor(private tiersService: TiersService) {}
 
