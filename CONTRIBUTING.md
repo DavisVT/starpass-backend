@@ -54,6 +54,15 @@ npx prisma migrate dev
 npm run start:dev
 ```
 
+### Running tests with a dedicated test database
+
+```bash
+make docker-test-up     # starts PostgreSQL for tests on port 5433
+DATABASE_URL="postgresql://postgres:password@localhost:5433/starpass_test" npx prisma migrate deploy
+npm test
+make docker-test-down   # stop when done
+```
+
 ## Workflow
 
 1. Browse open issues and comment to express interest
