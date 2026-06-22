@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PassesController } from './passes.controller';
 import { PassesService } from './passes.service';
 import { ListPassesDto } from './dto/list-passes.dto';
+import { PurchaseBundleDto } from './dto/purchase-bundle.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 describe('PassesController', () => {
@@ -21,6 +22,7 @@ describe('PassesController', () => {
     getCreatorPassCount: jest.fn(),
     getReceipt: jest.fn(),
     getMetadata: jest.fn(),
+    purchaseBundle: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -102,6 +104,57 @@ describe('PassesController', () => {
 
       expect(service.getMetadata).toHaveBeenCalledWith('pass-uuid');
       expect(result).toEqual(metadata);
+    });
+  });
+
+  describe('purchaseBundle', () => {
+    it('should call PassesService.purchaseBundle with tier IDs and fan address', async () => {
+      const dto: PurchaseBundleDto = { tierIds: [1, 2, 3] };
+      const mockPasses = [
+        { id: 'pass-1', tierId: 'tier-1' },
+        { id: 'pass-2', tierId: 'tier-2' },
+        { id: 'pass-3', tierId: 'tier-3' },
+      ];
+      mockPassesService.purchaseBundle.mockResolvedValue(mockPasses);
+
+      const result = await controller.purchaseBundle(dto, {
+        user: { address: 'GB_FAN' },
+      });
+
+      expect(service.purchaseBundle).toHaveBeenCalledWith([1, 2, 3], 'GB_FAN');
+      expect(result).toEqual(mockPasses);
+    });
+
+    it('should handle single tier bundle', async () => {
+      const dto: PurchaseBundleDto = { tierIds: [1] };
+      const mockPasses = [{ id: 'pass-1', tierId: 'tier-1' }];
+      mockPassesService.purchaseBundle.mockResolvedValue(mockPasses);
+
+      const result = await controller.purchaseBundle(dto, {
+        user: { address: 'GB_FAN' },
+      });
+
+      expect(service.purchaseBundle).toHaveBeenCalledWith([1], 'GB_FAN');
+      expect(result).toEqual(mockPasses);
+    });
+
+    it('should handle maximum 5 tier bundle', async () => {
+      const dto: PurchaseBundleDto = { tierIds: [1, 2, 3, 4, 5] };
+      const mockPasses = [
+        { id: 'pass-1', tierId: 'tier-1' },
+        { id: 'pass-2', tierId: 'tier-2' },
+        { id: 'pass-3', tierId: 'tier-3' },
+        { id: 'pass-4', tierId: 'tier-4' },
+        { id: 'pass-5', tierId: 'tier-5' },
+      ];
+      mockPassesService.purchaseBundle.mockResolvedValue(mockPasses);
+
+      const result = await controller.purchaseBundle(dto, {
+        user: { address: 'GB_FAN' },
+      });
+
+      expect(service.purchaseBundle).toHaveBeenCalledWith([1, 2, 3, 4, 5], 'GB_FAN');
+      expect(result).toHaveLength(5);
     });
   });
 });

@@ -6,7 +6,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportStatusDto } from './dto/update-report-status.dto';
-import { ReportStatus, ReportTargetType } from '@prisma/client';
+// Using plain string literals for report enums in tests to avoid runtime enum dependency
 
 describe('ReportsController', () => {
   let controller: ReportsController;
@@ -46,7 +46,7 @@ describe('ReportsController', () => {
     it('should call ReportsService.submitReport', async () => {
       const req = { user: { sub: 'user-123' } };
       const dto: CreateReportDto = {
-        targetType: ReportTargetType.CREATOR,
+        targetType: 'CREATOR',
         targetId: 'creator-123',
         reason: 'Inappropriate content',
       };
@@ -79,7 +79,7 @@ describe('ReportsController', () => {
     it('should call ReportsService.updateStatus', async () => {
       const id = 'report-123';
       const dto: UpdateReportStatusDto = {
-        status: ReportStatus.RESOLVED,
+        status: 'RESOLVED',
       };
       await controller.updateStatus(id, dto);
       expect(reportsService.updateStatus).toHaveBeenCalledWith(id, dto.status);

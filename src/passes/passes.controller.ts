@@ -1,8 +1,9 @@
-import { Controller, Get, Param, Query, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { PassesService } from './passes.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ListPassesDto } from './dto/list-passes.dto';
+import { PurchaseBundleDto } from './dto/purchase-bundle.dto';
 
 @ApiTags('passes')
 @Controller({ path: 'passes', version: '1' })
@@ -79,5 +80,16 @@ export class PassesController {
   @ApiResponse({ status: 400, description: 'Invalid query parameters' })
   findAll(@Query() query: ListPassesDto) {
     return this.passesService.findAll(query);
+  }
+
+  @Post('bundle')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Purchase multiple passes in a single transaction' })
+  @ApiResponse({ status: 201, description: 'All passes created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid tier IDs or too many tiers' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  purchaseBundle(@Body() dto: PurchaseBundleDto, @Request() req: any) {
+    return this.passesService.purchaseBundle(dto.tierIds, req.user.address);
   }
 }

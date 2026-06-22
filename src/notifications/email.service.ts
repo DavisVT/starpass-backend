@@ -85,4 +85,41 @@ export class EmailService {
       this.logger.error(`Failed to send email to ${fanEmail}: ${error instanceof Error ? error.message : 'Unknown error'}`, error instanceof Error ? error.stack : undefined);
     }
   }
+
+  async sendBundlePurchaseEmail(
+    creatorEmail: string,
+    fanAddress: string,
+    tierNames: string,
+    totalAmount: string | number,
+    passCount: number,
+  ): Promise<void> {
+    try {
+      const fromEmail = this.configService.get<string>('FROM_EMAIL', 'noreply@starpass.com');
+
+      const html = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>New Bundle Purchased!</h2>
+          <p>Great news! A fan has just purchased a bundle of ${passCount} passes from you.</p>
+          <ul>
+            <li><strong>Fan Address:</strong> ${fanAddress}</li>
+            <li><strong>Tiers:</strong> ${tierNames}</li>
+            <li><strong>Total Amount:</strong> ${totalAmount} USDC</li>
+            <li><strong>Pass Count:</strong> ${passCount}</li>
+          </ul>
+          <p>Log in to your dashboard to view more details.</p>
+        </div>
+      `;
+
+      await this.transporter.sendMail({
+        from: fromEmail,
+        to: creatorEmail,
+        subject: `New Bundle Purchase (${passCount} passes) - StarPass`,
+        html,
+      });
+
+      this.logger.log(`Email notification sent to ${creatorEmail} for bundle purchase.`);
+    } catch (error) {
+      this.logger.error(`Failed to send email to ${creatorEmail}: ${error instanceof Error ? error.message : 'Unknown error'}`, error instanceof Error ? error.stack : undefined);
+    }
+  }
 }

@@ -28,6 +28,22 @@ export function validateConfig(): void {
     (envVar) => !process.env[envVar] || process.env[envVar].trim() === '',
   );
 
+  // During tests, provide sane defaults for a subset of variables that are
+  // not required to be set in CI/local test runs.
+  if (process.env.NODE_ENV === 'test') {
+    if (!process.env.CONTENT_URL_SECRET) {
+      process.env.CONTENT_URL_SECRET = 'test-content-secret';
+    }
+    // Recompute missing vars after defaults
+    const stillMissing = requiredEnvVars.filter(
+      (envVar) => !process.env[envVar] || process.env[envVar].trim() === '',
+    );
+    if (stillMissing.length > 0) {
+      throw new Error(`Missing required environment variables: ${stillMissing.join(', ')}`);
+    }
+    return;
+  }
+
   if (missingEnvVars.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missingEnvVars.join(', ')}`,

@@ -1,0 +1,80 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type Creator {
+  id: String!
+  stellarAddress: String!
+  email: String
+  displayName: String!
+  bio: String
+  avatarUrl: String
+  totalEarned: Float!
+  registeredAt: DateTime!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+type Tier {
+  id: String!
+  onChainId: Int!
+  name: String!
+  description: String
+  priceUsdc: Float!
+  durationDays: Int!
+  maxSupply: Int!
+  minted: Int!
+  active: Boolean!
+  creator: Creator
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Fan {
+  id: String!
+  stellarAddress: String!
+  displayName: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Pass {
+  id: String!
+  onChainId: Int!
+  tier: Tier
+  creator: Creator
+  fan: Fan
+  purchasedAt: DateTime!
+  expiresAt: DateTime!
+  txHash: String
+  active: Boolean!
+  createdAt: DateTime!
+}
+
+type PaginatedCreators {
+  data: [Creator!]!
+  total: Int!
+  page: Int!
+  limit: Int!
+}
+
+type PaginatedTiers {
+  data: [Tier!]!
+  total: Int!
+  page: Int!
+  limit: Int!
+}
+
+type Query {
+  creator(address: String!): Creator!
+  creators(page: Int = 1, limit: Int = 20): PaginatedCreators!
+  tier(creatorAddress: String!, onChainId: Int!): Tier!
+  tiers(creatorAddress: String, page: Int = 1, limit: Int = 20): PaginatedTiers!
+  pass(id: String!): Pass!
+  fan(address: String!): Fan!
+}

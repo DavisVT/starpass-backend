@@ -1,10 +1,12 @@
 import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, Delete, BadRequestException, ForbiddenException, ValidationPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { CreatorsService } from './creators.service';
+import { CreateContentScheduleDto } from './dto/create-content-schedule.dto';
 import { CreateCreatorDto } from './dto/create-creator.dto';
 import { UpdateCreatorDto } from './dto/update-creator.dto';
 import { ListPayoutsDto } from './dto/list-payouts.dto';
 import { ListEarningsDto } from './dto/list-earnings.dto';
+import { UpdateCreatorCategoriesDto } from './dto/update-creator-categories.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { RegisterWebhookDto } from '../webhooks/dto/register-webhook.dto';
@@ -29,11 +31,12 @@ export class CreatorsController {
   @Get()
   @ApiOperation({ summary: 'List all creators' })
   @ApiResponse({ status: 200, description: 'Return paginated list of creators' })
-  findAll(@Query('page') page = 1, @Query('limit') limit = 20) {
+  @ApiQuery({ name: 'category', required: false, description: 'Filter by category slug' })
+  findAll(@Query('page') page = 1, @Query('limit') limit = 20, @Query('category') category?: string) {
     if (+limit > 50) {
       throw new BadRequestException('Limit cannot exceed 50');
     }
-    return this.creatorsService.findAll(+page, +limit);
+    return this.creatorsService.findAll(+page, +limit, category);
   }
 
   @Get(':address')
@@ -63,6 +66,22 @@ export class CreatorsController {
   @ApiResponse({ status: 404, description: 'Creator profile not found' })
   update(@Request() req: any, @Body() dto: UpdateCreatorDto) {
     return this.creatorsService.update(req.user.address, dto);
+  }
+
+  @Patch(':id/categories')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update creator categories' })
+  @ApiResponse({ status: 200, description: 'Creator categories updated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Not your creator profile' })
+  @ApiResponse({ status: 404, description: 'Creator profile not found' })
+  updateCategories(@Param('id') id: string, @Body() dto: UpdateCreatorCategoriesDto, @Request() req: any) {
+    if (req.user?.sub !== id) {
+      throw new ForbiddenException('You can only manage categories for your own profile');
+    }
+
+    return this.creatorsService.updateCategories(id, dto.categories);
   }
 
   @Get(':address/earnings')
@@ -191,6 +210,22 @@ export class CreatorsController {
     @Param('webhookId') webhookId: string,
   ) {
     return this.webhooksService.remove(id, webhookId);
+  }
+
+  @Post(':id/schedule')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Schedule content to become available to pass holders' })
+  @ApiResponse({ status: 201, description: 'Content scheduled' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  scheduleContent(
+    @Param('id') id: string,
+    @Body() dto: CreateContentScheduleDto,
+    @Request() req: any,
+  ) {
+    if (req.user?.sub !== id) throw new ForbiddenException('You can only schedule content for your own creator profile');
+    return this.creatorsService.createContentSchedule(id, dto);
   }
 
   @Get(':id/payouts')

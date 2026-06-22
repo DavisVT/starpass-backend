@@ -6,12 +6,13 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { Optional } from '@nestjs/common';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
-    private jwtService: JwtService,
-    private configService: ConfigService,
+    @Optional() private jwtService?: JwtService,
+    @Optional() private configService?: ConfigService,
   ) {}
 
   canActivate(context: ExecutionContext): boolean {

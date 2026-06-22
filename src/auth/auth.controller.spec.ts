@@ -69,7 +69,7 @@ describe('AuthController - Rate Limiting', () => {
         message: 'test-challenge-123',
       };
 
-      const result = controller.login(loginDto);
+      const result = await controller.login(loginDto);
       expect(result).toEqual({ access_token: 'test-jwt-token' });
       expect(service.login).toHaveBeenCalledWith(
         loginDto.stellarAddress,

@@ -45,6 +45,6 @@ export class ReportsController {
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Report not found' })
   updateStatus(@Param('id') id: string, @Body() dto: UpdateReportStatusDto) {
-    return this.reportsService.updateStatus(id, dto.status);
+    return this.reportsService.updateStatus(id, dto.status as any);
   }
 }

@@ -55,6 +55,7 @@ describe('FansService', () => {
     },
     $transaction: jest.fn(),
   };
+  
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
