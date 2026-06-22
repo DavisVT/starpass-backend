@@ -1,6 +1,6 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { HttpLoggerMiddleware } from './common/http-logger.middleware';
+import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 import { AuthModule } from './auth/auth.module';
 import { CreatorsModule } from './creators/creators.module';
 import { FansModule } from './fans/fans.module';
