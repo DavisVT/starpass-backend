@@ -1,6 +1,6 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { HttpLoggerMiddleware } from './common/http-logger.middleware';
+import { HttpLoggerMiddleware as RequestLoggerMiddleware } from './common/http-logger.middleware';
 import { AuthModule } from './auth/auth.module';
 import { CreatorsModule } from './creators/creators.module';
 import { FansModule } from './fans/fans.module';
@@ -12,10 +12,13 @@ import { DevModule } from './dev/dev.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
+import { MetricsModule } from './metrics/metrics.module';
+import { RedisCacheModule } from './common/cache/cache.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    RedisCacheModule,
     AuthModule,
     CreatorsModule,
     FansModule,
@@ -27,6 +30,7 @@ import { AdminModule } from './admin/admin.module';
     WebhooksModule,
     NotificationsModule,
     AdminModule,
+    MetricsModule,
   ],
 })
 export class AppModule implements NestModule {

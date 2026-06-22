@@ -4,6 +4,8 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { ListPassesDto } from './dto/list-passes.dto';
 import { EmailService } from '../notifications/email.service';
 import { TiersService } from '../tiers/tiers.service';
+import { MetricsService } from '../metrics/metrics.service';
+import { AdminConfigService } from '../admin/admin-config.service';
 
 @Injectable()
 export class PassesService {
@@ -14,6 +16,8 @@ export class PassesService {
     private webhooksService: WebhooksService,
     private emailService: EmailService,
     private tiersService: TiersService,
+    private metricsService: MetricsService,
+    private adminConfigService: AdminConfigService,
   ) {}
 
   /**
@@ -262,6 +266,11 @@ export class PassesService {
       const amount = Number(tier.priceUsdc);
       const fee = 0;
       const netAmount = amount - fee;
+
+      // Track metrics
+      this.metricsService.incActivePasses(creator.stellarAddress);
+      this.metricsService.incRevenue(creator.stellarAddress, amount);
+
       this.prisma.earningsRecord.create({
         data: {
           creatorId: creator.id,
