@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { CreatorsModule } from './creators.module';
 import { CreatorsService } from './creators.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { PrismaService } from '../common/prisma.service';
 
 describe('Creators GET /creators/:id/revenue Integration', () => {
   let app: INestApplication;
@@ -22,19 +23,28 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
   const mockCreatorsService = {
     getRevenue: jest.fn().mockResolvedValue(mockRevenueResult),
   };
+  const mockPrismaService = {
+    onModuleInit: jest.fn(),
+    onModuleDestroy: jest.fn(),
+  };
+
+  const mockPrismaService = {
+    onModuleInit: jest.fn(),
+    onModuleDestroy: jest.fn(),
+  };
 
   const successJwtGuard = {
     canActivate: (context: any) => {
-      const request = context.switchToHttp().getRequest();
-      request.user = { sub: 'user-123' };
+      const req = context.switchToHttp().getRequest();
+      req.user = { sub: 'user-123' };
       return true;
     },
   };
 
   const mismatchJwtGuard = {
     canActivate: (context: any) => {
-      const request = context.switchToHttp().getRequest();
-      request.user = { sub: 'user-456' };
+      const req = context.switchToHttp().getRequest();
+      req.user = { sub: 'user-456' };
       return true;
     },
   };
@@ -45,7 +55,9 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
     })
       .overrideProvider(CreatorsService)
       .useValue(mockCreatorsService)
-      .overrideProvider(JwtAuthGuard)
+      .overrideProvider(PrismaService)
+      .useValue(mockPrismaService)
+      .overrideGuard(JwtAuthGuard)
       .useValue(successJwtGuard)
       .compile();
 
@@ -54,7 +66,9 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   beforeEach(() => {
@@ -71,22 +85,21 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
   });
 
   it('should return 403 when the authenticated user does not own the creator', async () => {
-    // Rebuild the application with a guard that returns a different authenticated user
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [CreatorsModule],
     })
       .overrideProvider(CreatorsService)
       .useValue(mockCreatorsService)
-      .overrideProvider(JwtAuthGuard)
+      .overrideProvider(PrismaService)
+      .useValue(mockPrismaService)
+      .overrideGuard(JwtAuthGuard)
       .useValue(mismatchJwtGuard)
       .compile();
 
     const localApp = moduleFixture.createNestApplication();
     await localApp.init();
 
-    await request(localApp.getHttpServer())
-      .get('/creators/user-123/revenue')
-      .expect(403);
+    await request(localApp.getHttpServer()).get('/creators/user-123/revenue').expect(403);
 
     await localApp.close();
   });
