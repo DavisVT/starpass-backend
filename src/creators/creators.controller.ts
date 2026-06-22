@@ -1,11 +1,14 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, Delete, BadRequestException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, Delete, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { CreatorsService } from './creators.service';
 import { CreateCreatorDto } from './dto/create-creator.dto';
 import { UpdateCreatorDto } from './dto/update-creator.dto';
+import { ListPayoutsDto } from './dto/list-payouts.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { RegisterWebhookDto } from '../webhooks/dto/register-webhook.dto';
+import { CreatorAnalyticsDto } from './creator-analytics.dto';
+import { BlockFanDto } from './dto/block-fan.dto';
 
 @ApiTags('creators')
 @Controller('creators')
@@ -54,6 +57,34 @@ export class CreatorsController {
     return this.creatorsService.update(req.user.address, dto);
   }
 
+  @Post(':id/blocks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Block a fan from purchasing creator passes' })
+  @ApiResponse({ status: 201, description: 'Fan blocked successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  blockFan(
+    @Param('id') id: string,
+    @Body() dto: BlockFanDto,
+  ) {
+    return this.creatorsService.blockFan(id, dto);
+  }
+
+  @Delete(':id/blocks/:fanAddress')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Unblock a fan for a creator' })
+  @ApiResponse({ status: 200, description: 'Fan unblocked successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  unblockFan(
+    @Param('id') id: string,
+    @Param('fanAddress') fanAddress: string,
+  ) {
+    return this.creatorsService.unblockFan(id, fanAddress);
+  }
+
   @Get(':address/earnings')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -63,6 +94,39 @@ export class CreatorsController {
   @ApiResponse({ status: 404, description: 'Creator not found' })
   getEarnings(@Param('address') address: string) {
     return this.creatorsService.getEarnings(address);
+  }
+
+  @Get(':id/revenue')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get creator revenue analytics' })
+  @ApiResponse({ status: 200, description: 'Return creator revenue analytics' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  getRevenue(@Param('id') id: string, @Request() req: any) {
+    if (req.user?.sub !== id) {
+      throw new ForbiddenException('You are not authorized to access this creator revenue summary');
+    }
+
+    return this.creatorsService.getRevenue(id);
+  }
+
+  @Get(':id/analytics')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get creator subscription analytics' })
+  @ApiQuery({ name: 'period', required: false, enum: ['30d', '90d', '1y'] })
+  @ApiResponse({ status: 200, type: CreatorAnalyticsDto, description: 'Return creator subscription analytics' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  getAnalytics(@Param('id') id: string, @Query('period') period = '30d', @Request() req: any) {
+    if (req.user?.sub !== id) {
+      throw new ForbiddenException('You are not authorized to access this creator analytics summary');
+    }
+
+    return this.creatorsService.getAnalytics(id, period);
   }
 
   @Post(':id/webhooks')
@@ -91,5 +155,21 @@ export class CreatorsController {
     @Param('webhookId') webhookId: string,
   ) {
     return this.webhooksService.remove(id, webhookId);
+  }
+
+  @Get(':id/payouts')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get payout history for a creator (creator only)' })
+  @ApiResponse({ status: 200, description: 'Paginated list of payouts' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden — only the creator can view their payouts' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  getPayouts(
+    @Param('id') id: string,
+    @Query() query: ListPayoutsDto,
+    @Request() req: any,
+  ) {
+    return this.creatorsService.getPayouts(id, req.user.sub, query);
   }
 }

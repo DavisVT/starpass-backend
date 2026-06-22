@@ -36,22 +36,41 @@ model Session {
 }
 
 model Creator {
-  id             String   @id @default(uuid())
-  userId         String   @unique @map("user_id")
-  stellarAddress String   @unique @map("stellar_address")
-  email          String?  @unique
-  displayName    String   @map("display_name")
+  id             String    @id @default(uuid())
+  userId         String    @unique @map("user_id")
+  stellarAddress String    @unique @map("stellar_address")
+  email          String?   @unique
+  displayName    String    @map("display_name")
   bio            String?
-  avatarUrl      String?  @map("avatar_url")
-  totalEarned    Decimal  @default(0) @map("total_earned")
-  registeredAt   DateTime @map("registered_at")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatarUrl      String?   @map("avatar_url")
+  totalEarned    Decimal   @default(0) @map("total_earned")
+  registeredAt   DateTime  @map("registered_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tiers          Tier[]
   passes         Pass[]
+  blocks         Block[]
   webhooks       WebhookConfig[]
+  payouts        Payout[]
   @@map("creators")
+}
+
+enum PayoutStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model Payout {
+  id        String       @id @default(uuid())
+  creatorId String       @map("creator_id")
+  amount    Decimal
+  txHash    String?      @map("tx_hash")
+  status    PayoutStatus @default(PENDING)
+  createdAt DateTime     @default(now()) @map("created_at")
+  creator   Creator      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  @@map("payouts")
 }
 
 model WebhookConfig {
@@ -67,14 +86,17 @@ model WebhookConfig {
 }
 
 model Fan {
-  id             String   @id @default(uuid())
-  userId         String   @unique @map("user_id")
-  stellarAddress String   @unique @map("stellar_address")
-  displayName    String?  @map("display_name")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  passes         Pass[]
+  id                  String    @id @default(uuid())
+  userId              String    @unique @map("user_id")
+  stellarAddress      String    @unique @map("stellar_address")
+  displayName         String?   @map("display_name")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  deletionRequestedAt DateTime? @map("deletion_requested_at")
+  anonymized          Boolean   @default(false)
+  permanentlyDeletedAt DateTime? @map("permanently_deleted_at")
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passes              Pass[]
   @@map("fans")
 }
 
@@ -94,8 +116,22 @@ model Tier {
   updatedAt    DateTime @updatedAt @map("updated_at")
   creator      Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   passes       Pass[]
+  waitlist     WaitlistEntry[]
   @@unique([creatorId, onChainId])
   @@map("tiers")
+}
+
+model WaitlistEntry {
+  id           String   @id @default(uuid())
+  tierId       String   @map("tier_id")
+  fanAddress   String   @map("fan_address")
+  joinedAt      DateTime @default(now()) @map("joined_at")
+  notified     Boolean  @default(false)
+  tier          Tier     @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  @@unique([tierId, fanAddress])
+  @@map("waitlist_entries")
 }
 
 model Pass {
@@ -123,26 +159,10 @@ model IndexerCheckpoint {
   @@map("indexer_checkpoints")
 }
 
-enum ReportTargetType {
-  CREATOR
-  TIER
-}
-
-enum ReportStatus {
-  PENDING
-  RESOLVED
-  DISMISSED
-}
-
-model Report {
-  id          String           @id @default(uuid())
-  reporterId  String           @map("reporter_id")
-  targetType  ReportTargetType @map("target_type")
-  targetId    String           @map("target_id")
-  reason      String
-  status      ReportStatus     @default(PENDING)
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
-  reporter    User             @relation(fields: [reporterId], references: [id], onDelete: Cascade)
-  @@map("reports")
+model PlatformConfig {
+  id          String   @id @default("singleton")
+  feeBps      Int      @default(250) @map("fee_bps")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedBy   String?  @map("updated_by")
+  @@map("platform_configs")
 }

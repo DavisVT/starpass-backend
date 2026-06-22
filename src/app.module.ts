@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { CreatorsModule } from './creators/creators.module';
@@ -7,9 +7,10 @@ import { TiersModule } from './tiers/tiers.module';
 import { PassesModule } from './passes/passes.module';
 import { IndexerModule } from './indexer/indexer.module';
 import { StellarModule } from './stellar/stellar.module';
+import { DevModule } from './dev/dev.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { NotificationsModule } from './notifications/notifications.module';
-import { ReportsModule } from './reports/reports.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -21,9 +22,18 @@ import { ReportsModule } from './reports/reports.module';
     PassesModule,
     IndexerModule,
     StellarModule,
+    DevModule,
     WebhooksModule,
     NotificationsModule,
-    ReportsModule,
+    AdminModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(RequestLoggerMiddleware)
+      .exclude('health', 'health/(.*)')
+      .forRoutes('*');
+  }
+}
+
