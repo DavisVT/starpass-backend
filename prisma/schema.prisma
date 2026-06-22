@@ -86,14 +86,17 @@ model WebhookConfig {
 }
 
 model Fan {
-  id             String   @id @default(uuid())
-  userId         String   @unique @map("user_id")
-  stellarAddress String   @unique @map("stellar_address")
-  displayName    String?  @map("display_name")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  passes         Pass[]
+  id                  String    @id @default(uuid())
+  userId              String    @unique @map("user_id")
+  stellarAddress      String    @unique @map("stellar_address")
+  displayName         String?   @map("display_name")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  deletionRequestedAt DateTime? @map("deletion_requested_at")
+  anonymized          Boolean   @default(false)
+  permanentlyDeletedAt DateTime? @map("permanently_deleted_at")
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passes              Pass[]
   @@map("fans")
 }
 
