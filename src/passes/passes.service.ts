@@ -262,6 +262,11 @@ export class PassesService {
       const amount = Number(tier.priceUsdc);
       const fee = 0;
       const netAmount = amount - fee;
+
+      // Track metrics
+      this.metricsService.incActivePasses(creator.stellarAddress);
+      this.metricsService.incRevenue(creator.stellarAddress, amount);
+
       this.prisma.earningsRecord.create({
         data: {
           creatorId: creator.id,
