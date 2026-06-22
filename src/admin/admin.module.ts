@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
-import { AdminController } from './admin.controller';
-import { AdminService } from './admin.service';
-import { AdminApiKeyGuard } from './admin-api-key.guard';
+import { AdminConfigController } from './admin-config.controller';
+import { AdminConfigService } from './admin-config.service';
 import { PrismaModule } from '../common/prisma.module';
+import { StellarModule } from '../stellar/stellar.module';
 
 @Module({
-  imports: [PrismaModule],
-  controllers: [AdminController],
-  providers: [AdminService, AdminApiKeyGuard],
+  imports: [PrismaModule, StellarModule],
+  controllers: [AdminConfigController],
+  providers: [AdminConfigService],
+  exports: [AdminConfigService],
 })
 export class AdminModule {}
