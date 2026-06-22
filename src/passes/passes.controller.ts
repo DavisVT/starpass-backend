@@ -65,6 +65,14 @@ export class PassesController {
     return this.passesService.getReceipt(id, req.user.address);
   }
 
+  @Get(':id/metadata')
+  @ApiOperation({ summary: 'Get NFT-style metadata for a pass' })
+  @ApiResponse({ status: 200, description: 'Return NFT-compatible metadata' })
+  @ApiResponse({ status: 404, description: 'Pass not found' })
+  getMetadata(@Param('id') id: string) {
+    return this.passesService.getMetadata(id);
+  }
+
   @Get()
   @ApiOperation({ summary: 'List all passes with filters and pagination' })
   @ApiResponse({ status: 200, description: 'Return paginated list of passes' })

@@ -21,6 +21,7 @@ export function validateConfig(): void {
     'STELLAR_RPC_URL',
     'STELLAR_NETWORK',
     'STARPASS_CONTRACT_ID',
+    'CONTENT_URL_SECRET',
   ];
 
   const missingEnvVars = requiredEnvVars.filter(

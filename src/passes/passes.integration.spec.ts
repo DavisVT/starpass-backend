@@ -76,6 +76,23 @@ describe('Passes GET /passes Integration', () => {
         limit,
       });
     }),
+    getMetadata: jest.fn().mockImplementation((passId) => {
+      if (passId === 'pass-1') {
+        return Promise.resolve({
+          name: 'Test Creator - Test Tier Pass',
+          description: 'A StarPass for Test Tier tier from Test Creator',
+          image: 'https://example.com/avatar.png',
+          attributes: [
+            { trait_type: 'Tier Name', value: 'Test Tier' },
+            { trait_type: 'Creator', value: 'Test Creator' },
+            { trait_type: 'Purchased At', value: '2026-01-01T00:00:00.000Z' },
+            { trait_type: 'Expires At', value: '2026-12-31T23:59:59.000Z' },
+            { trait_type: 'Status', value: 'active' },
+          ],
+        });
+      }
+      throw new Error('Pass not found');
+    }),
   };
 
   beforeAll(async () => {
@@ -252,5 +269,25 @@ describe('Passes GET /passes Integration', () => {
     await request(app.getHttpServer())
       .get('/passes?limit=100')
       .expect(400);
+  });
+
+  it('should return NFT-style metadata for a pass', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/passes/pass-1/metadata')
+      .expect(200);
+
+    expect(res.body).toEqual({
+      name: 'Test Creator - Test Tier Pass',
+      description: 'A StarPass for Test Tier tier from Test Creator',
+      image: 'https://example.com/avatar.png',
+      attributes: expect.arrayContaining([
+        { trait_type: 'Tier Name', value: 'Test Tier' },
+        { trait_type: 'Creator', value: 'Test Creator' },
+        { trait_type: 'Purchased At', value: '2026-01-01T00:00:00.000Z' },
+        { trait_type: 'Expires At', value: '2026-12-31T23:59:59.000Z' },
+        { trait_type: 'Status', value: 'active' },
+      ]),
+    });
+    expect(mockPassesService.getMetadata).toHaveBeenCalledWith('pass-1');
   });
 });

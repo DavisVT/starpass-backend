@@ -1,12 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
+import { ConfigModule } from '@nestjs/config';
 import { AdminModule } from '../admin/admin.module';
 import { AdminService } from '../admin/admin.service';
 import { CreatorsModule } from '../creators/creators.module';
 import { CreatorsService } from '../creators/creators.service';
 import { PrismaService } from '../common/prisma.service';
 import { AdminApiKeyGuard } from '../admin/admin-api-key.guard';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 describe('Featured Creators', () => {
   let app: INestApplication;
@@ -42,21 +44,22 @@ describe('Featured Creators', () => {
     $disconnect: jest.fn(),
   };
 
-  const adminApiKeyGuard = {
-    canActivate: () => true,
-  };
+  const mockGuard = { canActivate: () => true };
 
   beforeAll(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
-      imports: [AdminModule, CreatorsModule],
+      imports: [ConfigModule.forRoot({ ignoreEnvFile: true, isGlobal: true }), AdminModule, CreatorsModule],
     })
       .overrideProvider(PrismaService)
       .useValue(mockPrisma)
       .overrideGuard(AdminApiKeyGuard)
-      .useValue(adminApiKeyGuard)
+      .useValue(mockGuard)
+      .overrideGuard(JwtAuthGuard)
+      .useValue(mockGuard)
       .compile();
 
     app = moduleRef.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.init();
   });
 

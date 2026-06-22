@@ -4,7 +4,6 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { ListPassesDto } from './dto/list-passes.dto';
 import { EmailService } from '../notifications/email.service';
 import { TiersService } from '../tiers/tiers.service';
-import { MetricsService } from '../metrics/metrics.service';
 import { AdminConfigService } from '../admin/admin-config.service';
 
 @Injectable()
@@ -16,7 +15,6 @@ export class PassesService {
     private webhooksService: WebhooksService,
     private emailService: EmailService,
     private tiersService: TiersService,
-    private metricsService: MetricsService,
     private adminConfigService: AdminConfigService,
   ) {}
 
@@ -303,6 +301,41 @@ export class PassesService {
     }
 
     return pass;
+  }
+
+  /**
+   * Get NFT-style metadata for a pass
+   *
+   * @param passId The pass record id.
+   * @returns NFT-compatible metadata { name, description, image, attributes: [{ trait_type, value }] }
+   * @throws {NotFoundException} If the pass is not found.
+   */
+  async getMetadata(passId: string) {
+    const pass = await this.prisma.pass.findUnique({
+      where: { id: passId },
+      include: { tier: true, creator: true },
+    });
+
+    if (!pass) {
+      throw new NotFoundException('Pass not found');
+    }
+
+    const now = new Date();
+    const isActive = pass.active && pass.expiresAt > now;
+    const status = isActive ? 'active' : 'expired';
+
+    return {
+      name: `${pass.creator.displayName} - ${pass.tier.name} Pass`,
+      description: `A StarPass for ${pass.tier.name} tier from ${pass.creator.displayName}`,
+      image: pass.creator.avatarUrl ?? '',
+      attributes: [
+        { trait_type: 'Tier Name', value: pass.tier.name },
+        { trait_type: 'Creator', value: pass.creator.displayName },
+        { trait_type: 'Purchased At', value: pass.purchasedAt.toISOString() },
+        { trait_type: 'Expires At', value: pass.expiresAt.toISOString() },
+        { trait_type: 'Status', value: status },
+      ],
+    };
   }
 
   /**
