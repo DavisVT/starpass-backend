@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, NotFoundException, ConflictException, HttpException, HttpStatus } from '@nestjs/common';
+import * as request from 'supertest';
 import { FansController } from './fans.controller';
 import { FansService } from './fans.service';
 
@@ -59,7 +60,7 @@ describe('FansController (Integration)', () => {
 
       mockFansService.findByAddress.mockResolvedValue(expectedFan);
 
-      const result = await app
+      const result = await request(app.getHttpServer())
         .get(`/fans/${mockFan.stellarAddress}`)
         .expect(200);
 
@@ -70,7 +71,7 @@ describe('FansController (Integration)', () => {
     it('should return 404 when fan not found', async () => {
       mockFansService.findByAddress.mockRejectedValue(new NotFoundException('Fan not found'));
 
-      await app.get(`/fans/nonexistent-address`).expect(404);
+      await request(app.getHttpServer()).get(`/fans/nonexistent-address`).expect(404);
     });
   });
 
@@ -90,7 +91,7 @@ describe('FansController (Integration)', () => {
 
       mockFansService.getSubscriptions.mockResolvedValue([mockPass]);
 
-      const result = await app
+      const result = await request(app.getHttpServer())
         .get(`/fans/${mockFan.stellarAddress}/subscriptions`)
         .expect(200);
 
@@ -103,7 +104,7 @@ describe('FansController (Integration)', () => {
         new NotFoundException('Fan not found'),
       );
 
-      await app.get(`/fans/nonexistent-address/subscriptions`).expect(404);
+      await request(app.getHttpServer()).get(`/fans/nonexistent-address/subscriptions`).expect(404);
     });
   });
 
@@ -119,7 +120,7 @@ describe('FansController (Integration)', () => {
 
       mockFansService.getDeletionStatus.mockResolvedValue(deletionStatus);
 
-      const result = await app
+      const result = await request(app.getHttpServer())
         .get(`/fans/${mockFan.stellarAddress}/deletion-status`)
         .expect(200);
 
@@ -141,7 +142,7 @@ describe('FansController (Integration)', () => {
 
       mockFansService.getDeletionStatus.mockResolvedValue(deletionStatus);
 
-      const result = await app
+      const result = await request(app.getHttpServer())
         .get(`/fans/${mockFan.stellarAddress}/deletion-status`)
         .expect(200);
 
@@ -155,7 +156,7 @@ describe('FansController (Integration)', () => {
         new NotFoundException('Fan not found'),
       );
 
-      await app.get(`/fans/nonexistent-address/deletion-status`).expect(404);
+      await request(app.getHttpServer()).get(`/fans/nonexistent-address/deletion-status`).expect(404);
     });
   });
 
@@ -170,7 +171,7 @@ describe('FansController (Integration)', () => {
 
       mockFansService.requestDataExport.mockResolvedValue(exportData);
 
-      const result = await app
+      const result = await request(app.getHttpServer())
         .post(`/fans/${mockFan.stellarAddress}/data-export`)
         .expect(200);
 
@@ -183,7 +184,7 @@ describe('FansController (Integration)', () => {
         new NotFoundException('Fan not found'),
       );
 
-      await app.post(`/fans/nonexistent-address/data-export`).expect(404);
+      await request(app.getHttpServer()).post(`/fans/nonexistent-address/data-export`).expect(404);
     });
 
     it('should return 429 when rate limited', async () => {
@@ -191,7 +192,7 @@ describe('FansController (Integration)', () => {
         new HttpException('Rate limited', HttpStatus.TOO_MANY_REQUESTS),
       );
 
-      await app.post(`/fans/${mockFan.stellarAddress}/data-export`).expect(429);
+      await request(app.getHttpServer()).post(`/fans/${mockFan.stellarAddress}/data-export`).expect(429);
     });
   });
 
@@ -204,7 +205,7 @@ describe('FansController (Integration)', () => {
 
       mockFansService.requestDeletion.mockResolvedValue(deletionRequest);
 
-      const result = await app
+      const result = await request(app.getHttpServer())
         .delete(`/fans/${mockFan.stellarAddress}/account`)
         .expect(202);
 
@@ -217,7 +218,7 @@ describe('FansController (Integration)', () => {
         new NotFoundException('Fan not found'),
       );
 
-      await app.delete(`/fans/nonexistent-address/account`).expect(404);
+      await request(app.getHttpServer()).delete(`/fans/nonexistent-address/account`).expect(404);
     });
 
     it('should return 409 when deletion already requested', async () => {
@@ -225,7 +226,7 @@ describe('FansController (Integration)', () => {
         new ConflictException('Deletion already requested for this account'),
       );
 
-      await app.delete(`/fans/${mockFan.stellarAddress}/account`).expect(409);
+      await request(app.getHttpServer()).delete(`/fans/${mockFan.stellarAddress}/account`).expect(409);
     });
 
     it('should cancel all active passes', async () => {
@@ -236,7 +237,7 @@ describe('FansController (Integration)', () => {
 
       mockFansService.requestDeletion.mockResolvedValue(deletionRequest);
 
-      await app.delete(`/fans/${mockFan.stellarAddress}/account`).expect(202);
+      await request(app.getHttpServer()).delete(`/fans/${mockFan.stellarAddress}/account`).expect(202);
 
       expect(mockFansService.requestDeletion).toHaveBeenCalledWith(mockFan.stellarAddress);
     });
