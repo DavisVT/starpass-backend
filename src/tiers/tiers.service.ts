@@ -61,6 +61,56 @@ export class TiersService {
     return { data, total, page, limit };
   }
 
+  async bulkCreate(creatorAddress: string, dtos: CreateTierDto[], callerAddress: string) {
+    if (creatorAddress !== callerAddress) {
+      throw new ForbiddenException('You can only create tiers for your own profile');
+    }
+
+    const creator = await this.prisma.creator.findUnique({ where: { stellarAddress: creatorAddress } });
+    if (!creator) throw new NotFoundException('Creator not found');
+
+    return this.prisma.$transaction(
+      dtos.map((dto) =>
+        this.prisma.tier.create({
+          data: {
+            onChainId: dto.onChainId,
+            creatorId: creator.id,
+            name: dto.name,
+            description: dto.description,
+            priceUsdc: dto.priceUsdc,
+            durationDays: dto.durationDays,
+            maxSupply: dto.maxSupply ?? 0,
+            active: dto.active ?? true,
+            syncedAt: new Date(),
+          },
+        }),
+      ),
+    );
+  }
+
+  async findAll(page: number, limit: number, creatorAddress?: string) {
+    const skip = (page - 1) * limit;
+
+    let creatorId: string | undefined;
+    if (creatorAddress) {
+      const creator = await this.prisma.creator.findUnique({
+        where: { stellarAddress: creatorAddress },
+        select: { id: true },
+      });
+      if (!creator) return { data: [], total: 0, page, limit };
+      creatorId = creator.id;
+    }
+
+    const where = { ...(creatorId ? { creatorId } : {}), active: true };
+
+    const [data, total] = await Promise.all([
+      this.prisma.tier.findMany({ where, skip, take: limit, orderBy: { onChainId: 'asc' } }),
+      this.prisma.tier.count({ where }),
+    ]);
+
+    return { data, total, page, limit };
+  }
+
   /**
    * Get all active tiers for a creator
    *
