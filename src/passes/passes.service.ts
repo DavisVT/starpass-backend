@@ -206,6 +206,19 @@ export class PassesService {
 
     if (!creator || !tier) return null;
 
+    const block = await this.prisma.block.findUnique({
+      where: {
+        creatorId_fanAddress: {
+          creatorId: creator.id,
+          fanAddress: data.fanAddress,
+        },
+      },
+    });
+
+    if (block) {
+      throw new ForbiddenException('Fan is blocked by this creator');
+    }
+
     // Check if the pass already exists
     const existingPass = await this.prisma.pass.findUnique({
       where: { onChainId: data.onChainId },

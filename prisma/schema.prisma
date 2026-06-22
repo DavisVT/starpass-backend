@@ -50,6 +50,7 @@ model Creator {
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tiers          Tier[]
   passes         Pass[]
+  blocks         Block[]
   webhooks       WebhookConfig[]
   payouts        Payout[]
   @@map("creators")

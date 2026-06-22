@@ -29,6 +29,9 @@ describe('PassesService', () => {
       findMany: jest.fn(),
       findFirst: jest.fn(),
     },
+    block: {
+      findUnique: jest.fn(),
+    },
   };
 
   const mockWebhooksService = {
@@ -83,6 +86,7 @@ describe('PassesService', () => {
       mockPrismaService.creator.findUnique.mockResolvedValue(mockCreator);
       mockPrismaService.tier.findFirst.mockResolvedValue(mockTier);
       mockPrismaService.fan.upsert.mockResolvedValue(mockFan);
+      mockPrismaService.block.findUnique.mockResolvedValue(null);
     });
 
     it('should create new pass and trigger webhook delivery', async () => {
@@ -121,6 +125,28 @@ describe('PassesService', () => {
       expect(prisma.pass.upsert).toHaveBeenCalled();
       expect(webhooksService.deliverPassPurchaseWebhook).not.toHaveBeenCalled();
       expect(result).toEqual(mockPass);
+    });
+
+    it('should reject a blocked fan purchase attempt', async () => {
+      mockPrismaService.block.findUnique.mockResolvedValue({
+        id: 'block-uuid',
+        creatorId: mockCreator.id,
+        fanAddress: mockData.fanAddress,
+      });
+
+      await expect(service.upsertFromChain(mockData)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(prisma.block.findUnique).toHaveBeenCalledWith({
+        where: {
+          creatorId_fanAddress: {
+            creatorId: mockCreator.id,
+            fanAddress: mockData.fanAddress,
+          },
+        },
+      });
+      expect(prisma.pass.upsert).not.toHaveBeenCalled();
+      expect(webhooksService.deliverPassPurchaseWebhook).not.toHaveBeenCalled();
     });
   });
 

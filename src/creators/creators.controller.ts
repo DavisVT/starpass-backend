@@ -8,6 +8,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { RegisterWebhookDto } from '../webhooks/dto/register-webhook.dto';
 import { CreatorAnalyticsDto } from './creator-analytics.dto';
+import { BlockFanDto } from './dto/block-fan.dto';
 
 @ApiTags('creators')
 @Controller('creators')
@@ -54,6 +55,34 @@ export class CreatorsController {
   @ApiResponse({ status: 404, description: 'Creator profile not found' })
   update(@Request() req: any, @Body() dto: UpdateCreatorDto) {
     return this.creatorsService.update(req.user.address, dto);
+  }
+
+  @Post(':id/blocks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Block a fan from purchasing creator passes' })
+  @ApiResponse({ status: 201, description: 'Fan blocked successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  blockFan(
+    @Param('id') id: string,
+    @Body() dto: BlockFanDto,
+  ) {
+    return this.creatorsService.blockFan(id, dto);
+  }
+
+  @Delete(':id/blocks/:fanAddress')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Unblock a fan for a creator' })
+  @ApiResponse({ status: 200, description: 'Fan unblocked successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  unblockFan(
+    @Param('id') id: string,
+    @Param('fanAddress') fanAddress: string,
+  ) {
+    return this.creatorsService.unblockFan(id, fanAddress);
   }
 
   @Get(':address/earnings')

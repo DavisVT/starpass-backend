@@ -24,6 +24,8 @@ StarPass Backend provides:
 | `GET` | `/creators/:address` | Get creator profile |
 | `POST` | `/creators/register` | Register as creator (auth required) |
 | `PATCH` | `/creators/profile` | Update creator profile (auth required) |
+| `POST` | `/creators/:id/blocks` | Block a fan from purchasing creator passes (auth required) |
+| `DELETE` | `/creators/:id/blocks/:fanAddress` | Unblock a fan for a creator (auth required) |
 | `GET` | `/tiers/creator/:address` | Get all tiers for a creator |
 | `GET` | `/passes/check/:fanAddress/tier/:tierId` | Check if fan has valid pass for tier |
 | `GET` | `/passes/check/:fanAddress/creator/:creatorAddress` | Check if fan has any valid pass from creator |

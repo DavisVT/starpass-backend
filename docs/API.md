@@ -86,6 +86,20 @@ Update your creator profile. Requires JWT.
 ### GET /creators/:address/earnings 🔒
 Get creator earnings summary. Requires JWT.
 
+### POST /creators/:id/blocks 🔒
+Block a fan from purchasing passes from a creator. Requires JWT.
+
+**Body:**
+```json
+{
+  "fanAddress": "GFAN...",
+  "reason": "Optional reason"
+}
+```
+
+### DELETE /creators/:id/blocks/:fanAddress 🔒
+Unblock a fan so they can purchase passes from a creator again. Requires JWT.
+
 ---
 
 ## Tier Endpoints

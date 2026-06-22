@@ -23,6 +23,10 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
   const mockCreatorsService = {
     getRevenue: jest.fn().mockResolvedValue(mockRevenueResult),
   };
+  const mockPrismaService = {
+    onModuleInit: jest.fn(),
+    onModuleDestroy: jest.fn(),
+  };
 
   const mockPrismaService = {
     onModuleInit: jest.fn(),
