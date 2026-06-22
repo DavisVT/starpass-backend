@@ -1,8 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 
 @Injectable()
 export class FansService {
+  private readonly logger = new Logger(FansService.name);
+  private readonly COOLING_OFF_PERIOD_DAYS = 30;
+
   constructor(private prisma: PrismaService) {}
 
   /**
@@ -49,61 +52,207 @@ export class FansService {
     });
   }
 
-  async getActivity(
-    stellarAddress: string,
-    typeFilter: string | undefined,
-    page: number,
-    limit: number,
-  ) {
-    const fan = await this.prisma.fan.findUnique({ where: { stellarAddress } });
-    if (!fan) throw new NotFoundException('Fan not found');
-
-    const skip = (page - 1) * limit;
-    const now = new Date();
-
-    const passes = await this.prisma.pass.findMany({
-      where: { fanId: fan.id },
-      include: { tier: { select: { name: true, onChainId: true } }, creator: { select: { displayName: true, stellarAddress: true } } },
-      orderBy: { purchasedAt: 'desc' },
+  /**
+   * Request deletion of a fan account (GDPR compliance).
+   * Initiates a 30-day cooling off period and cancels all active passes.
+   * 
+   * @param stellarAddress The Stellar public key of the fan.
+   * @returns The updated fan record with deletion request timestamp.
+   * @throws {NotFoundException} If the fan is not found.
+   * @throws {ConflictException} If deletion has already been requested.
+   */
+  async requestDeletion(stellarAddress: string) {
+    const fan = await this.prisma.fan.findUnique({
+      where: { stellarAddress },
     });
 
-    const events: Array<{ type: string; data: Record<string, unknown>; createdAt: Date }> = [];
+    if (!fan) throw new NotFoundException('Fan not found');
 
-    for (const pass of passes) {
-      events.push({
-        type: 'pass_purchased',
-        data: {
-          passId: pass.id,
-          tierName: pass.tier.name,
-          creatorName: pass.creator.displayName,
-          creatorAddress: pass.creator.stellarAddress,
-          expiresAt: pass.expiresAt,
-        },
-        createdAt: pass.purchasedAt,
-      });
-
-      if (pass.expiresAt < now) {
-        events.push({
-          type: 'pass_expired',
-          data: {
-            passId: pass.id,
-            tierName: pass.tier.name,
-            creatorName: pass.creator.displayName,
-          },
-          createdAt: pass.expiresAt,
-        });
-      }
+    if (fan.deletionRequestedAt) {
+      throw new ConflictException('Deletion already requested for this account');
     }
 
-    const filtered = typeFilter
-      ? events.filter((e) => e.type === typeFilter)
-      : events;
+    // Start a transaction to ensure data consistency
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Cancel all active passes
+      await this.cancelAllActivePasses(fan.id, tx);
 
-    filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      // Mark fan for deletion with 30-day cooling off period
+      const updatedFan = await tx.fan.update({
+        where: { id: fan.id },
+        data: {
+          deletionRequestedAt: new Date(),
+        },
+      });
 
-    const total = filtered.length;
-    const data = filtered.slice(skip, skip + limit);
+      this.logger.log(
+        `Deletion requested for fan ${stellarAddress}. Cooling off period starts now.`,
+      );
 
-    return { data, total, page, limit };
+      return updatedFan;
+    });
+
+    return result;
+  }
+
+  /**
+   * Check if a fan's deletion cooling off period has elapsed.
+   * 
+   * @param fan The fan record to check.
+   * @returns True if 30 days have passed since deletion was requested.
+   */
+  private canFinalizeDeletion(fan: any): boolean {
+    if (!fan.deletionRequestedAt) return false;
+
+    const coolingOffPeriodMs = this.COOLING_OFF_PERIOD_DAYS * 24 * 60 * 60 * 1000;
+    const now = new Date().getTime();
+    const requestedTime = new Date(fan.deletionRequestedAt).getTime();
+
+    return now - requestedTime >= coolingOffPeriodMs;
+  }
+
+  /**
+   * Anonymize a fan's personal data (called after deletion request).
+   * This is typically called immediately after requestDeletion() in a scheduled job.
+   * 
+   * @param stellarAddress The Stellar public key of the fan.
+   * @throws {NotFoundException} If the fan is not found.
+   * @throws {BadRequestException} If deletion has not been requested.
+   */
+  async anonymizeFanData(stellarAddress: string) {
+    const fan = await this.prisma.fan.findUnique({
+      where: { stellarAddress },
+    });
+
+    if (!fan) throw new NotFoundException('Fan not found');
+
+    if (!fan.deletionRequestedAt) {
+      throw new BadRequestException('Deletion has not been requested for this account');
+    }
+
+    if (fan.anonymized) {
+      this.logger.warn(`Fan ${stellarAddress} data is already anonymized`);
+      return fan;
+    }
+
+    // Anonymize personal data
+    const anonymizedFan = await this.prisma.fan.update({
+      where: { id: fan.id },
+      data: {
+        displayName: `Deleted User ${fan.id.slice(0, 8)}`,
+        anonymized: true,
+      },
+    });
+
+    this.logger.log(`Fan ${stellarAddress} data anonymized`);
+
+    return anonymizedFan;
+  }
+
+  /**
+   * Permanently delete a fan account after the cooling off period has elapsed.
+   * This should only be called after the 30-day cooling off period.
+   * 
+   * @param stellarAddress The Stellar public key of the fan.
+   * @returns The permanently deleted fan record.
+   * @throws {NotFoundException} If the fan is not found.
+   * @throws {BadRequestException} If deletion has not been requested or cooling off period hasn't elapsed.
+   */
+  async permanentlyDeleteFan(stellarAddress: string) {
+    const fan = await this.prisma.fan.findUnique({
+      where: { stellarAddress },
+    });
+
+    if (!fan) throw new NotFoundException('Fan not found');
+
+    if (!fan.deletionRequestedAt) {
+      throw new BadRequestException('Deletion has not been requested for this account');
+    }
+
+    if (!this.canFinalizeDeletion(fan)) {
+      const coolingOffEndDate = new Date(fan.deletionRequestedAt);
+      coolingOffEndDate.setDate(coolingOffEndDate.getDate() + this.COOLING_OFF_PERIOD_DAYS);
+      throw new BadRequestException(
+        `Cooling off period not yet elapsed. Permanent deletion available after ${coolingOffEndDate.toISOString()}`,
+      );
+    }
+
+    // Delete the fan (will cascade to sessions due to User relation)
+    // Passes are NOT deleted to maintain transaction records
+    const deletedFan = await this.prisma.fan.delete({
+      where: { id: fan.id },
+    });
+
+    // Also delete the associated user
+    await this.prisma.user.delete({
+      where: { id: fan.userId },
+    });
+
+    this.logger.log(`Fan ${stellarAddress} permanently deleted`);
+
+    return deletedFan;
+  }
+
+  /**
+   * Cancel all active passes for a fan.
+   * This is used when a fan requests account deletion.
+   * 
+   * @param fanId The ID of the fan.
+   * @param tx Optional Prisma transaction client (for use within transactions).
+   */
+  private async cancelAllActivePasses(fanId: string, tx?: any) {
+    const prismaClient = tx || this.prisma;
+
+    const cancelledPasses = await prismaClient.pass.updateMany({
+      where: {
+        fanId,
+        active: true,
+      },
+      data: {
+        active: false,
+      },
+    });
+
+    if (cancelledPasses.count > 0) {
+      this.logger.log(`Cancelled ${cancelledPasses.count} active passes for fan ${fanId}`);
+    }
+
+    return cancelledPasses;
+  }
+
+  /**
+   * Get deletion status for a fan account.
+   * 
+   * @param stellarAddress The Stellar public key of the fan.
+   * @returns Deletion status including request date and cooling off period end date.
+   * @throws {NotFoundException} If the fan is not found.
+   */
+  async getDeletionStatus(stellarAddress: string) {
+    const fan = await this.prisma.fan.findUnique({
+      where: { stellarAddress },
+    });
+
+    if (!fan) throw new NotFoundException('Fan not found');
+
+    if (!fan.deletionRequestedAt) {
+      return {
+        deletionRequested: false,
+        deletionRequestedAt: null,
+        coolingOffEndDate: null,
+        canFinalizeDeletion: false,
+        anonymized: false,
+      };
+    }
+
+    const coolingOffEndDate = new Date(fan.deletionRequestedAt);
+    coolingOffEndDate.setDate(coolingOffEndDate.getDate() + this.COOLING_OFF_PERIOD_DAYS);
+
+    return {
+      deletionRequested: true,
+      deletionRequestedAt: fan.deletionRequestedAt,
+      coolingOffEndDate,
+      canFinalizeDeletion: this.canFinalizeDeletion(fan),
+      anonymized: fan.anonymized,
+    };
   }
 }
