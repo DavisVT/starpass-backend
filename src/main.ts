@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { validateConfig } from './common/config.validation';
+import { createCorsOptions } from './common/cors.config';
 
 // Fail fast if required environment variables are missing
 validateConfig();
@@ -20,10 +21,7 @@ async function bootstrap() {
   );
 
   // CORS
-  app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true,
-  });
+  app.enableCors(createCorsOptions());
 
   // Swagger docs
   if (process.env.NODE_ENV !== 'production') {

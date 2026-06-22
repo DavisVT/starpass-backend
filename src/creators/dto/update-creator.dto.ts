@@ -20,21 +20,18 @@ export class UpdateCreatorDto {
   @IsUrl()
   avatarUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Twitter/X profile URL', example: 'https://twitter.com/username' })
-  @IsString()
-  @IsOptional()
+  @ApiPropertyOptional({ description: 'Updated Twitter/X profile URL', example: 'https://x.com/janedoe' })
   @IsUrl()
+  @IsOptional()
   twitterUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Instagram profile URL', example: 'https://instagram.com/username' })
-  @IsString()
-  @IsOptional()
+  @ApiPropertyOptional({ description: 'Updated Instagram profile URL', example: 'https://instagram.com/janedoe' })
   @IsUrl()
+  @IsOptional()
   instagramUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Personal or project website URL', example: 'https://mysite.com' })
-  @IsString()
-  @IsOptional()
+  @ApiPropertyOptional({ description: 'Updated personal or creator website URL', example: 'https://janedoe.example' })
   @IsUrl()
+  @IsOptional()
   websiteUrl?: string;
 }
