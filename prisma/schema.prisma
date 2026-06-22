@@ -51,6 +51,7 @@ model Creator {
   tiers          Tier[]
   passes         Pass[]
   webhooks       WebhookConfig[]
+  earningsRecords EarningsRecord[]
   @@map("creators")
 }
 
@@ -75,6 +76,7 @@ model Fan {
   updatedAt      DateTime @updatedAt @map("updated_at")
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   passes         Pass[]
+  earningsRecords EarningsRecord[]
   @@map("fans")
 }
 
@@ -93,7 +95,8 @@ model Tier {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
   creator      Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  passes       Pass[]
+  passes          Pass[]
+  earningsRecords EarningsRecord[]
   @@unique([creatorId, onChainId])
   @@map("tiers")
 }
@@ -114,6 +117,21 @@ model Pass {
   creator     Creator  @relation(fields: [creatorId], references: [id])
   fan         Fan      @relation(fields: [fanId], references: [id])
   @@map("passes")
+}
+
+model EarningsRecord {
+  id        String   @id @default(uuid())
+  creatorId String   @map("creator_id")
+  fanId     String   @map("fan_id")
+  tierId    String   @map("tier_id")
+  amount    Decimal  @map("amount")
+  fee       Decimal  @default(0) @map("fee")
+  netAmount Decimal  @map("net_amount")
+  createdAt DateTime @default(now()) @map("created_at")
+  creator   Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  fan       Fan      @relation(fields: [fanId], references: [id], onDelete: Cascade)
+  tier      Tier     @relation(fields: [tierId], references: [id])
+  @@map("earnings_records")
 }
 
 model IndexerCheckpoint {

@@ -14,6 +14,7 @@ describe('CreatorsController', () => {
   const mockCreatorsService = {
     findAll: jest.fn(),
     getRevenue: jest.fn(),
+    getEarningsHistory: jest.fn(),
   };
   const mockWebhooksService = {
     register: jest.fn(),
@@ -104,10 +105,33 @@ describe('CreatorsController', () => {
       expect(creatorsService.getRevenue).toHaveBeenCalledWith(creatorId);
     });
 
-    it('should throw ForbiddenException when authenticated user does not match path id', async () => {
-      await expect(
+    it('should throw ForbiddenException when authenticated user does not match path id', () => {
+      expect(() =>
         controller.getRevenue('user-123', { user: { sub: 'user-456' } }),
-      ).rejects.toThrowError('You are not authorized to access this creator revenue summary');
+      ).toThrow('You are not authorized to access this creator revenue summary');
+    });
+  });
+
+  describe('getEarningsHistory', () => {
+    it('should return earnings history for the authenticated creator', async () => {
+      const userId = 'user-123';
+      const result = { data: [], total: 0, page: 1, limit: 20 };
+      mockCreatorsService.getEarningsHistory.mockResolvedValue(result);
+
+      const response = await controller.getEarningsHistory(
+        userId,
+        { page: 1, limit: 20 },
+        { user: { sub: userId } },
+      );
+
+      expect(response).toEqual(result);
+      expect(creatorsService.getEarningsHistory).toHaveBeenCalledWith(userId, { page: 1, limit: 20 });
+    });
+
+    it('should throw ForbiddenException when authenticated user does not match path id', () => {
+      expect(() =>
+        controller.getEarningsHistory('user-123', {}, { user: { sub: 'user-456' } }),
+      ).toThrow('You are not authorized to access this creator earnings history');
     });
   });
 

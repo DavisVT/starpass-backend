@@ -236,6 +236,22 @@ export class PassesService {
     });
 
     if (!existingPass) {
+      const amount = Number(tier.priceUsdc);
+      const fee = 0;
+      const netAmount = amount - fee;
+      this.prisma.earningsRecord.create({
+        data: {
+          creatorId: creator.id,
+          fanId: fan.id,
+          tierId: tier.id,
+          amount,
+          fee,
+          netAmount,
+        },
+      }).catch((err) => {
+        this.logger.error(`Error recording earnings: ${err.message}`);
+      });
+
       // Trigger webhook delivery asynchronously without blocking
       this.webhooksService.deliverPassPurchaseWebhook(creator.id, pass).catch((err) => {
         this.logger.error(`Error triggering webhook: ${err.message}`);

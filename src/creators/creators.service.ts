@@ -90,6 +90,53 @@ export class CreatorsService {
     return { stellarAddress, totalEarnings: total, passCount: passes.length };
   }
 
+  async getEarningsHistory(
+    ownerUserId: string,
+    options: { from?: string; to?: string; page?: number; limit?: number },
+  ) {
+    const creator = await this.prisma.creator.findUnique({ where: { userId: ownerUserId } });
+    if (!creator) throw new NotFoundException('Creator not found');
+
+    const { from, to, page = 1, limit = 20 } = options;
+    const skip = (page - 1) * limit;
+
+    const where: any = { creatorId: creator.id };
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) where.createdAt.lte = new Date(to);
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.earningsRecord.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: { fan: true, tier: true },
+      }),
+      this.prisma.earningsRecord.count({ where }),
+    ]);
+
+    return { data, total, page, limit };
+  }
+
+  async recordEarning(creatorId: string, fanId: string, tierId: string, amount: number) {
+    const fee = 0;
+    const netAmount = amount - fee;
+
+    return this.prisma.earningsRecord.create({
+      data: {
+        creatorId,
+        fanId,
+        tierId,
+        amount,
+        fee,
+        netAmount,
+      },
+    });
+  }
+
   async getRevenue(ownerUserId: string) {
     const creator = await this.prisma.creator.findUnique({ where: { userId: ownerUserId } });
     if (!creator) throw new NotFoundException('Creator not found');

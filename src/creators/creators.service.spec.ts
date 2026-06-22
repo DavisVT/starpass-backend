@@ -14,6 +14,10 @@ describe('CreatorsService', () => {
     pass: {
       findMany: jest.fn(),
     },
+    earningsRecord: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+    },
   };
 
   beforeEach(async () => {
@@ -92,6 +96,95 @@ describe('CreatorsService', () => {
         pendingBalance: 0,
         topTiers: [],
       });
+    });
+  });
+
+  describe('getEarningsHistory', () => {
+    it('should throw NotFoundException when creator is missing', async () => {
+      mockPrismaService.creator.findUnique.mockResolvedValue(null);
+      await expect(
+        service.getEarningsHistory('user-123', {}),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should return paginated earnings records', async () => {
+      const creator = { id: 'creator-1' };
+      const earningsRecords = [
+        {
+          id: 'er-1',
+          creatorId: 'creator-1',
+          fanId: 'fan-1',
+          tierId: 'tier-1',
+          amount: '10.00',
+          fee: '0',
+          netAmount: '10.00',
+          createdAt: new Date('2024-06-01'),
+          fan: { id: 'fan-1', stellarAddress: 'GB_FAN1' },
+          tier: { id: 'tier-1', name: 'Gold' },
+        },
+      ];
+
+      mockPrismaService.creator.findUnique.mockResolvedValue(creator);
+      mockPrismaService.earningsRecord.findMany.mockResolvedValue(earningsRecords);
+      mockPrismaService.earningsRecord.count.mockResolvedValue(1);
+
+      const result = await service.getEarningsHistory('user-123', { page: 1, limit: 20 });
+
+      expect(result).toEqual({
+        data: earningsRecords,
+        total: 1,
+        page: 1,
+        limit: 20,
+      });
+      expect(mockPrismaService.earningsRecord.findMany).toHaveBeenCalledWith({
+        where: { creatorId: 'creator-1' },
+        skip: 0,
+        take: 20,
+        orderBy: { createdAt: 'desc' },
+        include: { fan: true, tier: true },
+      });
+    });
+
+    it('should apply date range filtering', async () => {
+      const creator = { id: 'creator-1' };
+      mockPrismaService.creator.findUnique.mockResolvedValue(creator);
+      mockPrismaService.earningsRecord.findMany.mockResolvedValue([]);
+      mockPrismaService.earningsRecord.count.mockResolvedValue(0);
+
+      await service.getEarningsHistory('user-123', {
+        from: '2024-01-01',
+        to: '2024-06-30',
+        page: 1,
+        limit: 10,
+      });
+
+      expect(mockPrismaService.earningsRecord.findMany).toHaveBeenCalledWith({
+        where: {
+          creatorId: 'creator-1',
+          createdAt: {
+            gte: new Date('2024-01-01'),
+            lte: new Date('2024-06-30'),
+          },
+        },
+        skip: 0,
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: { fan: true, tier: true },
+      });
+    });
+
+    it('should handle pagination correctly', async () => {
+      const creator = { id: 'creator-1' };
+      mockPrismaService.creator.findUnique.mockResolvedValue(creator);
+      mockPrismaService.earningsRecord.findMany.mockResolvedValue([]);
+      mockPrismaService.earningsRecord.count.mockResolvedValue(50);
+
+      const result = await service.getEarningsHistory('user-123', { page: 3, limit: 10 });
+
+      expect(result).toEqual({ data: [], total: 50, page: 3, limit: 10 });
+      expect(mockPrismaService.earningsRecord.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 20, take: 10 }),
+      );
     });
   });
 });
