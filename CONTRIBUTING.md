@@ -10,6 +10,28 @@ This project participates in the [Stellar Wave Program](https://drips.network/wa
 
 ## Setup
 
+### With Docker (recommended)
+
+```bash
+git clone https://github.com/YOUR_USERNAME/starpass-backend
+cd starpass-backend
+cp .env.example .env
+# Fill in STARPASS_CONTRACT_ID and other required vars in .env
+make docker-up          # starts PostgreSQL on port 5432
+npm install
+npx prisma generate
+npx prisma migrate dev
+npm run start:dev
+```
+
+To stop the services:
+
+```bash
+make docker-down
+```
+
+### Without Docker
+
 ```bash
 git clone https://github.com/YOUR_USERNAME/starpass-backend
 cd starpass-backend
@@ -19,6 +41,15 @@ cp .env.example .env
 npx prisma generate
 npx prisma migrate dev
 npm run start:dev
+```
+
+### Running tests with a dedicated test database
+
+```bash
+make docker-test-up     # starts PostgreSQL for tests on port 5433
+DATABASE_URL="postgresql://postgres:password@localhost:5433/starpass_test" npx prisma migrate deploy
+npm test
+make docker-test-down   # stop when done
 ```
 
 ## Workflow
