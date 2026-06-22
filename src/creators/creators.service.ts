@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { CreateCreatorDto } from './dto/create-creator.dto';
 import { UpdateCreatorDto } from './dto/update-creator.dto';
 import { CreatorAnalyticsDto } from './creator-analytics.dto';
+import { ListPayoutsDto } from './dto/list-payouts.dto';
 
 @Injectable()
 export class CreatorsService {
@@ -292,5 +293,69 @@ export class CreatorsService {
 
     if (!activeAtStart) return 0;
     return Number(((activeAtEnd / activeAtStart) * 100).toFixed(1));
+  }
+
+  /**
+   * Record a payout for a creator after a successful withdrawal.
+   *
+   * @param creatorId - Internal creator UUID.
+   * @param amount - Payout amount in USDC.
+   * @param txHash - On-chain transaction hash.
+   * @param status - Payout status (defaults to COMPLETED).
+   * @returns The created Payout record.
+   * @throws {NotFoundException} If the creator is not found.
+   */
+  async recordPayout(
+    creatorId: string,
+    amount: string,
+    txHash?: string | null,
+    status: 'PENDING' | 'COMPLETED' | 'FAILED' = 'COMPLETED',
+  ) {
+    const creator = await this.prisma.creator.findUnique({ where: { id: creatorId } });
+    if (!creator) throw new NotFoundException('Creator not found');
+
+    return this.prisma.payout.create({
+      data: {
+        creatorId,
+        amount,
+        txHash: txHash ?? null,
+        status,
+      },
+    });
+  }
+
+  /**
+   * Return paginated payout history for a creator.
+   * Only the creator themselves may access this data (enforced at controller layer).
+   *
+   * @param ownerUserId - JWT subject (user ID) of the authenticated creator.
+   * @param dto - Pagination options.
+   * @returns Paginated list of payouts plus total count.
+   * @throws {NotFoundException} If the creator record is not found for the given user.
+   * @throws {ForbiddenException} If the requester is not the creator owner.
+   */
+  async getPayouts(ownerUserId: string, requestUserId: string, dto: ListPayoutsDto) {
+    if (ownerUserId !== requestUserId) {
+      throw new ForbiddenException('You are not authorized to access this creator payout history');
+    }
+
+    const creator = await this.prisma.creator.findUnique({ where: { userId: ownerUserId } });
+    if (!creator) throw new NotFoundException('Creator not found');
+
+    const page = dto.page ?? 1;
+    const limit = dto.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      this.prisma.payout.findMany({
+        where: { creatorId: creator.id },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.payout.count({ where: { creatorId: creator.id } }),
+    ]);
+
+    return { data, total, page, limit };
   }
 }

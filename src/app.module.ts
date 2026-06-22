@@ -10,6 +10,7 @@ import { StellarModule } from './stellar/stellar.module';
 import { DevModule } from './dev/dev.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     DevModule,
     WebhooksModule,
     NotificationsModule,
+    AdminModule,
   ],
 })
 export class AppModule {}
