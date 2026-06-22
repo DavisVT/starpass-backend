@@ -17,6 +17,7 @@ export class UpdateCreatorDto {
   @ApiPropertyOptional({ description: 'Updated avatar image URL', example: 'https://example.com/avatar.png' })
   @IsString()
   @IsOptional()
+  @IsUrl()
   avatarUrl?: string;
 
   @ApiPropertyOptional({ description: 'Updated Twitter/X profile URL', example: 'https://x.com/janedoe' })
