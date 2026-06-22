@@ -1,16 +1,17 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, Delete, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, Delete, BadRequestException, ForbiddenException, ValidationPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { CreatorsService } from './creators.service';
 import { CreateCreatorDto } from './dto/create-creator.dto';
 import { UpdateCreatorDto } from './dto/update-creator.dto';
-import { AddMemberDto } from './dto/add-member.dto';
+import { ListPayoutsDto } from './dto/list-payouts.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { RegisterWebhookDto } from '../webhooks/dto/register-webhook.dto';
 import { CreatorAnalyticsDto } from './creator-analytics.dto';
+import { BlockFanDto } from './dto/block-fan.dto';
 
 @ApiTags('creators')
-@Controller('creators')
+@Controller({ path: 'creators', version: '1' })
 export class CreatorsController {
   constructor(
     private creatorsService: CreatorsService,
@@ -56,6 +57,34 @@ export class CreatorsController {
     return this.creatorsService.update(req.user.address, dto);
   }
 
+  @Post(':id/blocks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Block a fan from purchasing creator passes' })
+  @ApiResponse({ status: 201, description: 'Fan blocked successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  blockFan(
+    @Param('id') id: string,
+    @Body() dto: BlockFanDto,
+  ) {
+    return this.creatorsService.blockFan(id, dto);
+  }
+
+  @Delete(':id/blocks/:fanAddress')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Unblock a fan for a creator' })
+  @ApiResponse({ status: 200, description: 'Fan unblocked successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  unblockFan(
+    @Param('id') id: string,
+    @Param('fanAddress') fanAddress: string,
+  ) {
+    return this.creatorsService.unblockFan(id, fanAddress);
+  }
+
   @Get(':address/earnings')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -65,6 +94,25 @@ export class CreatorsController {
   @ApiResponse({ status: 404, description: 'Creator not found' })
   getEarnings(@Param('address') address: string) {
     return this.creatorsService.getEarnings(address);
+  }
+
+  @Get(':id/earnings-history')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get creator earnings history' })
+  @ApiResponse({ status: 200, description: 'Return paginated earnings history' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  getEarningsHistory(
+    @Param('id') id: string,
+    @Query(new ValidationPipe({ transform: true, whitelist: true })) query: ListEarningsDto,
+    @Request() req: any,
+  ) {
+    if (req.user?.sub !== id) {
+      throw new ForbiddenException('You are not authorized to access this creator earnings history');
+    }
+    return this.creatorsService.getEarningsHistory(id, query);
   }
 
   @Get(':id/revenue')
@@ -100,6 +148,43 @@ export class CreatorsController {
     return this.creatorsService.getAnalytics(id, period);
   }
 
+  @Post(':id/blocks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Block a fan from purchasing passes from this creator' })
+  @ApiResponse({ status: 201, description: 'Fan blocked' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Not your creator profile' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  blockFan(
+    @Param('id') id: string,
+    @Body() dto: BlockFanDto,
+    @Request() req: any,
+  ) {
+    if (req.user?.sub !== id) {
+      throw new ForbiddenException('You can only manage blocks for your own profile');
+    }
+    return this.creatorsService.blockFan(id, dto.fanAddress, dto.reason);
+  }
+
+  @Delete(':id/blocks/:fanAddress')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Unblock a fan' })
+  @ApiResponse({ status: 200, description: 'Fan unblocked' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Not your creator profile' })
+  unblockFan(
+    @Param('id') id: string,
+    @Param('fanAddress') fanAddress: string,
+    @Request() req: any,
+  ) {
+    if (req.user?.sub !== id) {
+      throw new ForbiddenException('You can only manage blocks for your own profile');
+    }
+    return this.creatorsService.unblockFan(id, fanAddress);
+  }
+
   @Post(':id/webhooks')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -128,25 +213,19 @@ export class CreatorsController {
     return this.webhooksService.remove(id, webhookId);
   }
 
-  @Post(':id/members')
+  @Get(':id/payouts')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Add a co-owner or editor to a creator profile (owner only)' })
-  @ApiResponse({ status: 201, description: 'Member added' })
-  @ApiResponse({ status: 403, description: 'Forbidden' })
-  @ApiResponse({ status: 409, description: 'Member already exists' })
-  addMember(@Param('id') id: string, @Request() req: any, @Body() dto: AddMemberDto) {
-    return this.creatorsService.addMember(id, req.user.address, dto.address, dto.role);
-  }
-
-  @Delete(':id/members/:address')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Remove a member from a creator profile (owner only)' })
-  @ApiResponse({ status: 200, description: 'Member removed' })
-  @ApiResponse({ status: 403, description: 'Forbidden' })
-  @ApiResponse({ status: 404, description: 'Member not found' })
-  removeMember(@Param('id') id: string, @Param('address') address: string, @Request() req: any) {
-    return this.creatorsService.removeMember(id, req.user.address, address);
+  @ApiOperation({ summary: 'Get payout history for a creator (creator only)' })
+  @ApiResponse({ status: 200, description: 'Paginated list of payouts' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden — only the creator can view their payouts' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  getPayouts(
+    @Param('id') id: string,
+    @Query() query: ListPayoutsDto,
+    @Request() req: any,
+  ) {
+    return this.creatorsService.getPayouts(id, req.user.sub, query);
   }
 }

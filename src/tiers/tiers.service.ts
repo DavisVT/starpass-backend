@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/commo
 import { createHmac } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma.service';
+import { EmailService } from '../notifications/email.service';
 
 const UNLOCK_TTL_SECONDS = 15 * 60; // 15 minutes
 
@@ -14,7 +15,7 @@ export class TiersService {
 
   /**
    * Get all active tiers for a creator
-   * 
+   *
    * @param stellarAddress The Stellar public key of the creator.
    * @returns A list of active tiers for the given creator.
    * @throws {NotFoundException} If the creator is not found.
