@@ -20,6 +20,7 @@ describe('PassesController', () => {
     findByFan: jest.fn(),
     getCreatorPassCount: jest.fn(),
     getReceipt: jest.fn(),
+    getMetadata: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -78,6 +79,29 @@ describe('PassesController', () => {
 
       expect(service.getReceipt).toHaveBeenCalledWith('pass-uuid', 'GB_FAN');
       expect(result).toEqual(receipt);
+    });
+  });
+
+  describe('getMetadata', () => {
+    it('should call PassesService.getMetadata with the pass id', async () => {
+      const metadata = {
+        name: 'Gold Pass - Creator',
+        description: 'Membership pass for Creator\'s Gold tier',
+        image: 'https://example.com/avatar.png',
+        attributes: [
+          { trait_type: 'Tier Name', value: 'Gold' },
+          { trait_type: 'Creator', value: 'Creator' },
+          { trait_type: 'Purchased At', value: '2026-06-21T12:00:00.000Z' },
+          { trait_type: 'Expires At', value: '2026-07-21T12:00:00.000Z' },
+          { trait_type: 'Status', value: 'active' },
+        ],
+      };
+      mockPassesService.getMetadata.mockResolvedValue(metadata);
+
+      const result = await controller.getMetadata('pass-uuid');
+
+      expect(service.getMetadata).toHaveBeenCalledWith('pass-uuid');
+      expect(result).toEqual(metadata);
     });
   });
 });

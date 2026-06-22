@@ -32,6 +32,9 @@ describe('PassesService', () => {
     block: {
       findUnique: jest.fn(),
     },
+    earningsRecord: {
+      create: jest.fn(),
+    },
   };
 
   const mockWebhooksService = {
@@ -350,6 +353,103 @@ describe('PassesService', () => {
           expiresAt: { lte: expect.any(Date) },
         },
       });
+    });
+  });
+
+  describe('getMetadata', () => {
+    const purchasedAt = new Date('2026-06-21T12:00:00.000Z');
+    const expiresAt = new Date('2026-07-21T12:00:00.000Z');
+    const mockPassMetadata = {
+      id: 'pass-uuid',
+      onChainId: BigInt(42),
+      active: true,
+      purchasedAt,
+      expiresAt,
+      tier: {
+        id: 'tier-uuid',
+        name: 'Gold',
+        description: 'Gold tier membership',
+      },
+      creator: {
+        id: 'creator-uuid',
+        displayName: 'Test Creator',
+        avatarUrl: 'https://example.com/avatar.png',
+      },
+    };
+
+    it('should return NFT-compatible metadata for an active pass', async () => {
+      mockPrismaService.pass.findUnique.mockResolvedValue(mockPassMetadata);
+
+      const result = await service.getMetadata('pass-uuid');
+
+      expect(prisma.pass.findUnique).toHaveBeenCalledWith({
+        where: { id: 'pass-uuid' },
+        include: { tier: true, creator: true },
+      });
+      expect(result).toEqual({
+        name: 'Gold Pass - Test Creator',
+        description: 'Gold tier membership',
+        image: 'https://example.com/avatar.png',
+        attributes: [
+          { trait_type: 'Tier Name', value: 'Gold' },
+          { trait_type: 'Creator', value: 'Test Creator' },
+          { trait_type: 'Purchased At', value: '2026-06-21T12:00:00.000Z' },
+          { trait_type: 'Expires At', value: '2026-07-21T12:00:00.000Z' },
+          { trait_type: 'Status', value: 'active' },
+        ],
+      });
+    });
+
+    it('should return expired status for an expired pass', async () => {
+      const expiredPass = {
+        ...mockPassMetadata,
+        expiresAt: new Date('2020-01-01T00:00:00.000Z'),
+      };
+      mockPrismaService.pass.findUnique.mockResolvedValue(expiredPass);
+
+      const result = await service.getMetadata('pass-uuid');
+
+      expect(result.attributes[4]).toEqual({ trait_type: 'Status', value: 'expired' });
+    });
+
+    it('should use fallback description when tier has no description', async () => {
+      const passWithoutDesc = {
+        ...mockPassMetadata,
+        tier: {
+          id: 'tier-uuid',
+          name: 'Gold',
+          description: null,
+        },
+      };
+      mockPrismaService.pass.findUnique.mockResolvedValue(passWithoutDesc);
+
+      const result = await service.getMetadata('pass-uuid');
+
+      expect(result.description).toBe("Membership pass for Test Creator's Gold tier");
+    });
+
+    it('should use empty string for image when creator has no avatar', async () => {
+      const passWithoutAvatar = {
+        ...mockPassMetadata,
+        creator: {
+          id: 'creator-uuid',
+          displayName: 'Test Creator',
+          avatarUrl: null,
+        },
+      };
+      mockPrismaService.pass.findUnique.mockResolvedValue(passWithoutAvatar);
+
+      const result = await service.getMetadata('pass-uuid');
+
+      expect(result.image).toBe('');
+    });
+
+    it('should throw NotFoundException when pass is not found', async () => {
+      mockPrismaService.pass.findUnique.mockResolvedValue(null);
+
+      await expect(service.getMetadata('missing-pass')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 });

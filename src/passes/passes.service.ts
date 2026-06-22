@@ -5,6 +5,13 @@ import { ListPassesDto } from './dto/list-passes.dto';
 import { EmailService } from '../notifications/email.service';
 import { TiersService } from '../tiers/tiers.service';
 
+export interface NftMetadata {
+  name: string;
+  description: string;
+  image: string;
+  attributes: Array<{ trait_type: string; value: string | number }>;
+}
+
 @Injectable()
 export class PassesService {
   private readonly logger = new Logger(PassesService.name);
@@ -348,6 +355,45 @@ export class PassesService {
       total,
       page,
       limit,
+    };
+  }
+
+  /**
+   * Get NFT-compatible metadata for a pass
+   * Public endpoint - no authentication required
+   *
+   * @param passId The pass record id.
+   * @returns NFT-compatible metadata { name, description, image, attributes }
+   * @throws {NotFoundException} If the pass is not found.
+   */
+  async getMetadata(passId: string): Promise<NftMetadata> {
+    const pass = await this.prisma.pass.findUnique({
+      where: { id: passId },
+      include: {
+        tier: true,
+        creator: true,
+      },
+    });
+
+    if (!pass) {
+      throw new NotFoundException('Pass not found');
+    }
+
+    const now = new Date();
+    const isExpired = pass.expiresAt <= now;
+    const status = pass.active && !isExpired ? 'active' : 'expired';
+
+    return {
+      name: `${pass.tier.name} Pass - ${pass.creator.displayName}`,
+      description: pass.tier.description || `Membership pass for ${pass.creator.displayName}'s ${pass.tier.name} tier`,
+      image: pass.creator.avatarUrl || '',
+      attributes: [
+        { trait_type: 'Tier Name', value: pass.tier.name },
+        { trait_type: 'Creator', value: pass.creator.displayName },
+        { trait_type: 'Purchased At', value: pass.purchasedAt.toISOString() },
+        { trait_type: 'Expires At', value: pass.expiresAt.toISOString() },
+        { trait_type: 'Status', value: status },
+      ],
     };
   }
 }

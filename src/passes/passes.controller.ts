@@ -72,4 +72,12 @@ export class PassesController {
   findAll(@Query() query: ListPassesDto) {
     return this.passesService.findAll(query);
   }
+
+  @Get(':id/metadata')
+  @ApiOperation({ summary: 'Get NFT-compatible metadata for a pass' })
+  @ApiResponse({ status: 200, description: 'Return NFT-compatible metadata for the pass' })
+  @ApiResponse({ status: 404, description: 'Pass not found' })
+  getMetadata(@Param('id') id: string) {
+    return this.passesService.getMetadata(id);
+  }
 }
