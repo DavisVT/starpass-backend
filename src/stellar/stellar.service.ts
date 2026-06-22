@@ -1,16 +1,20 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as StellarSdk from '@stellar/stellar-sdk';
+import { RateLimiter } from '../common/rate-limiter';
 
 const MAX_RETRIES = 3;
 const INITIAL_DELAY_MS = 500;
 const CIRCUIT_BREAKER_THRESHOLD = 5;
+const MAX_RATE_LIMIT = 3;
+const RATE_LIMIT_WINDOW_MS = 1000;
 
 @Injectable()
 export class StellarService {
   private readonly logger = new Logger(StellarService.name);
   private server: StellarSdk.rpc.Server;
   private contractId: string;
+  private rateLimiter: RateLimiter;
 
   private consecutiveFailures = 0;
   private circuitOpen = false;
@@ -19,6 +23,7 @@ export class StellarService {
     const rpcUrl = this.config.get('STELLAR_RPC_URL') || 'https://soroban-testnet.stellar.org';
     this.server = new StellarSdk.rpc.Server(rpcUrl);
     this.contractId = this.config.get('STARPASS_CONTRACT_ID') || '';
+    this.rateLimiter = new RateLimiter(MAX_RATE_LIMIT, RATE_LIMIT_WINDOW_MS);
   }
 
   private async withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
@@ -29,6 +34,7 @@ export class StellarService {
     let lastError: unknown;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
+        await this.rateLimiter.acquire();
         const result = await fn();
         this.consecutiveFailures = 0;
         this.circuitOpen = false;
@@ -105,6 +111,25 @@ export class StellarService {
   }
 
   /**
+   * Get events from the StarPass contract in a specific ledger range
+   */
+  async getContractEventsInRange(startLedger: number, endLedger: number) {
+    try {
+      return await this.withRetry('getContractEventsInRange', async () => {
+        const response = await this.server.getEvents({
+          startLedger,
+          filters: [{ type: 'contract', contractIds: [this.contractId] }],
+          limit: 100,
+        });
+        return (response.events || []).filter(event => event.ledger <= endLedger);
+      });
+    } catch (error) {
+      this.logger.error(`Error fetching events in range: ${(error as Error).message}`);
+      return [];
+    }
+  }
+
+  /**
    * Get the latest ledger number
    */
   async getLatestLedger(): Promise<number> {
@@ -115,11 +140,25 @@ export class StellarService {
   }
 
   /**
+   * Get ledger by sequence number to check its timestamp
+   */
+  async getLedger(sequence: number): Promise<{ sequence: number; closedAt: number }> {
+    return this.withRetry('getLedger', async () => {
+      const response = await this.server.getLedger(sequence);
+      return {
+        sequence: response.sequence,
+        closedAt: response.closedAt,
+      };
+    });
+  }
+
+  /**
    * Health check: returns true when Stellar RPC is reachable
    */
   async isHealthy(): Promise<boolean> {
     if (this.circuitOpen) return false;
     try {
+      await this.rateLimiter.acquire();
       await this.server.getLatestLedger();
       return true;
     } catch {
@@ -149,6 +188,7 @@ export class StellarService {
       }
 
       const account = await this.server.getAccount(adminAddress);
+      await this.rateLimiter.acquire();
       await this.server.simulateTransaction(
         new StellarSdk.TransactionBuilder(account, {
           fee: '100',

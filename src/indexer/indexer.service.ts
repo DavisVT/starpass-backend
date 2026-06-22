@@ -4,10 +4,11 @@ import { PrismaService } from '../common/prisma.service';
 import { StellarService } from '../stellar/stellar.service';
 import { TiersService } from '../tiers/tiers.service';
 import { PassesService } from '../passes/passes.service';
-import { ReindexDto, ReindexJobStatusDto } from './dto/reindex.dto';
+import { ReindexDto, ReindexJobStatusDto, ReplayHistoryDto } from './dto/reindex.dto';
 import { randomUUID } from 'crypto';
 
 const MAX_LEDGER_RANGE = 10000;
+const MAX_TIMESTAMP_RANGE_DAYS = 30; // 30 days max
 
 @Injectable()
 export class IndexerService implements OnModuleInit {
@@ -184,6 +185,32 @@ export class IndexerService implements OnModuleInit {
   }
 
   /**
+   * Find the closest ledger to a given timestamp using binary search
+   */
+  private async findLedgerForTimestamp(targetTimestamp: number, latestLedger: number): Promise<number> {
+    let low = 1;
+    let high = latestLedger;
+    let bestLedger = 1;
+
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      try {
+        const ledger = await this.stellar.getLedger(mid);
+        if (ledger.closedAt <= targetTimestamp) {
+          bestLedger = mid;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      } catch {
+        high = mid - 1;
+      }
+    }
+
+    return bestLedger;
+  }
+
+  /**
    * Start an asynchronous reindex job for a specific ledger range.
    * Validates the range and returns a job ID immediately.
    *
@@ -221,6 +248,50 @@ export class IndexerService implements OnModuleInit {
     // Start processing asynchronously (fire and forget)
     this.executeReindexJob(jobId).catch((err) => {
       this.logger.error(`Reindex job ${jobId} failed: ${err.message}`);
+    });
+
+    return { jobId };
+  }
+
+  /**
+   * Start an asynchronous replay-history job for a specific timestamp range.
+   * Validates the range and returns a job ID immediately.
+   *
+   * @param dto The replay-history request containing fromTimestamp and toTimestamp
+   * @returns An object with jobId and status
+   */
+  async startReplayHistory(dto: ReplayHistoryDto): Promise<{ jobId: string }> {
+    const { fromTimestamp, toTimestamp } = dto;
+
+    // Validate range
+    if (toTimestamp < fromTimestamp) {
+      throw new BadRequestException('toTimestamp must be greater than or equal to fromTimestamp');
+    }
+
+    const rangeSeconds = toTimestamp - fromTimestamp;
+    const rangeDays = rangeSeconds / (24 * 60 * 60);
+    if (rangeDays > MAX_TIMESTAMP_RANGE_DAYS) {
+      throw new BadRequestException(
+        `Timestamp range exceeds maximum of ${MAX_TIMESTAMP_RANGE_DAYS} days. Requested range: ${rangeDays.toFixed(1)} days`,
+      );
+    }
+
+    // Create job
+    const jobId = randomUUID();
+    const job: ReindexJobStatusDto = {
+      jobId,
+      status: 'pending',
+      fromTimestamp,
+      toTimestamp,
+      eventsProcessed: 0,
+      createdAt: new Date(),
+    };
+
+    this.reindexJobs.set(jobId, job);
+
+    // Start processing asynchronously (fire and forget)
+    this.executeReplayHistoryJob(jobId).catch((err) => {
+      this.logger.error(`Replay history job ${jobId} failed: ${err.message}`);
     });
 
     return { jobId };
@@ -271,7 +342,59 @@ export class IndexerService implements OnModuleInit {
   }
 
   /**
-   * Get the status of a reindex job.
+   * Execute the replay-history job asynchronously.
+   * Processes events in the specified timestamp range idempotently.
+   */
+  private async executeReplayHistoryJob(jobId: string): Promise<void> {
+    const job = this.reindexJobs.get(jobId);
+    if (!job) return;
+
+    job.status = 'running';
+
+    try {
+      const { fromTimestamp, toTimestamp } = job;
+      const latestLedger = await this.stellar.getLatestLedger();
+      
+      // Find the corresponding ledger range for the timestamps
+      const fromLedger = await this.findLedgerForTimestamp(fromTimestamp!, latestLedger);
+      const toLedger = await this.findLedgerForTimestamp(toTimestamp!, latestLedger);
+      
+      job.fromLedger = fromLedger;
+      job.toLedger = toLedger;
+
+      let eventsProcessed = 0;
+
+      // Process events from the specified range
+      for (let ledger = fromLedger; ledger <= toLedger; ledger++) {
+        try {
+          const events = await this.stellar.getContractEvents(ledger);
+
+          for (const event of events) {
+            // Process each event - the handlers use upsert, ensuring idempotency
+            await this.processEvent(event);
+            eventsProcessed++;
+          }
+        } catch (error) {
+          this.logger.warn(`Error processing ledger ${ledger}: ${error.message}`);
+          // Continue with next ledger
+        }
+      }
+
+      job.status = 'completed';
+      job.eventsProcessed = eventsProcessed;
+      job.completedAt = new Date();
+
+      this.logger.log(`Replay history job ${jobId} completed: ${eventsProcessed} events processed`);
+    } catch (error) {
+      job.status = 'failed';
+      job.error = error.message;
+      job.completedAt = new Date();
+      this.logger.error(`Replay history job ${jobId} failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get the status of a reindex or replay-history job.
    *
    * @param jobId The job ID to query
    * @returns The job status or throws NotFoundException
@@ -279,7 +402,7 @@ export class IndexerService implements OnModuleInit {
   getReindexJobStatus(jobId: string): ReindexJobStatusDto {
     const job = this.reindexJobs.get(jobId);
     if (!job) {
-      throw new BadRequestException(`Reindex job ${jobId} not found`);
+      throw new BadRequestException(`Job ${jobId} not found`);
     }
     return job;
   }

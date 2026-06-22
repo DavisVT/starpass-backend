@@ -18,7 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { IndexerService } from './indexer.service';
 import { AdminApiKeyGuard } from '../admin/admin-api-key.guard';
-import { ReindexDto, ReindexJobStatusDto } from './dto/reindex.dto';
+import { ReindexDto, ReindexJobStatusDto, ReplayHistoryDto } from './dto/reindex.dto';
 
 @ApiTags('indexer')
 @ApiSecurity('x-admin-api-key')
@@ -48,8 +48,29 @@ export class IndexerController {
     };
   }
 
+  @Post('replay-history')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Start a replay-history job for a specific timestamp range (admin only)' })
+  @ApiResponse({
+    status: HttpStatus.ACCEPTED,
+    description: 'Replay-history job started successfully',
+    type: Object,
+  })
+  @ApiBadRequestResponse({ description: 'Invalid timestamp range or exceeds 30 days limit' })
+  @ApiForbiddenResponse({ description: 'Invalid or missing admin API key' })
+  async startReplayHistory(
+    @Body() dto: ReplayHistoryDto,
+  ): Promise<{ jobId: string; status: string; message: string }> {
+    const result = await this.indexerService.startReplayHistory(dto);
+    return {
+      jobId: result.jobId,
+      status: 'pending',
+      message: 'Replay-history job started successfully',
+    };
+  }
+
   @Get('reindex/:jobId')
-  @ApiOperation({ summary: 'Get the status of a reindex job (admin only)' })
+  @ApiOperation({ summary: 'Get the status of a reindex or replay-history job (admin only)' })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Job status retrieved successfully',
