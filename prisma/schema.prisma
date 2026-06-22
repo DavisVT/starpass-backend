@@ -53,10 +53,22 @@ model Creator {
   tiers          Tier[]
   passes         Pass[]
   blocks         Block[]
+  categories     Category[]
   webhooks       WebhookConfig[]
   payouts        Payout[]
   earningsRecords EarningsRecord[]
   @@map("creators")
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  creators  Creator[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("categories")
 }
 
 enum PayoutStatus {

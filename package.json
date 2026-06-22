@@ -17,6 +17,9 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio"
   },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
   "dependencies": {
     "@apollo/server": "^4.13.0",
     "@nestjs/apollo": "^12.2.2",

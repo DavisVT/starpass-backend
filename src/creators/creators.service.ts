@@ -5,6 +5,14 @@ import { UpdateCreatorDto } from './dto/update-creator.dto';
 import { CreatorAnalyticsDto } from './creator-analytics.dto';
 import { ListPayoutsDto } from './dto/list-payouts.dto';
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 @Injectable()
 export class CreatorsService {
   constructor(private prisma: PrismaService) {}
@@ -16,17 +24,28 @@ export class CreatorsService {
     });
   }
 
-  async findAll(page: number, limit: number) {
+  async findAll(page: number, limit: number, category?: string) {
     const skip = (page - 1) * limit;
+    const categorySlug = category ? slugify(category) : undefined;
+    const where = categorySlug ? { categories: { some: { slug: categorySlug } } } : undefined;
     const [creators, total] = await Promise.all([
-      this.prisma.creator.findMany({ skip, take: limit, orderBy: { createdAt: 'desc' } }),
-      this.prisma.creator.count(),
+      this.prisma.creator.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: { categories: true },
+      }),
+      this.prisma.creator.count({ where }),
     ]);
     return { data: creators, total, page, limit };
   }
 
   async findByAddress(stellarAddress: string) {
-    const creator = await this.prisma.creator.findUnique({ where: { stellarAddress } });
+    const creator = await this.prisma.creator.findUnique({
+      where: { stellarAddress },
+      include: { categories: true },
+    });
     if (!creator) throw new NotFoundException('Creator not found');
     return creator;
   }
@@ -51,6 +70,36 @@ export class CreatorsService {
     const creator = await this.prisma.creator.findUnique({ where: { stellarAddress } });
     if (!creator) throw new NotFoundException('Creator not found');
     return this.prisma.creator.update({ where: { id: creator.id }, data: dto });
+  }
+
+  async updateCategories(ownerUserId: string, categories: string[]) {
+    const creator = await this.prisma.creator.findUnique({ where: { userId: ownerUserId } });
+    if (!creator) throw new NotFoundException('Creator not found');
+
+    const normalizedCategories = Array.from(
+      new Set(categories.map((category) => slugify(category)).filter(Boolean)),
+    );
+
+    if (normalizedCategories.length > 0) {
+      const existingCategories = await this.prisma.category.findMany({
+        where: { slug: { in: normalizedCategories } },
+        select: { slug: true },
+      });
+
+      if (existingCategories.length !== normalizedCategories.length) {
+        throw new BadRequestException('One or more categories are invalid');
+      }
+    }
+
+    return this.prisma.creator.update({
+      where: { id: creator.id },
+      data: {
+        categories: {
+          set: normalizedCategories.map((slug) => ({ slug })),
+        },
+      },
+      include: { categories: true },
+    });
   }
 
   async getEarnings(stellarAddress: string) {
