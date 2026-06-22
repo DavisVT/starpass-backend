@@ -7,6 +7,7 @@ import { TiersModule } from './tiers/tiers.module';
 import { PassesModule } from './passes/passes.module';
 import { IndexerModule } from './indexer/indexer.module';
 import { StellarModule } from './stellar/stellar.module';
+import { DevModule } from './dev/dev.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
@@ -21,6 +22,7 @@ import { AdminModule } from './admin/admin.module';
     PassesModule,
     IndexerModule,
     StellarModule,
+    DevModule,
     WebhooksModule,
     NotificationsModule,
     AdminModule,
