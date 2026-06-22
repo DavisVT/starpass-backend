@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { ListPassesDto } from './dto/list-passes.dto';
 import { EmailService } from '../notifications/email.service';
+import { TiersService } from '../tiers/tiers.service';
 
 @Injectable()
 export class PassesService {
@@ -12,6 +13,7 @@ export class PassesService {
     private prisma: PrismaService,
     private webhooksService: WebhooksService,
     private emailService: EmailService,
+    private tiersService: TiersService,
   ) {}
 
   /**
