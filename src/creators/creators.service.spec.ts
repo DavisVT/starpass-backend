@@ -21,6 +21,7 @@ describe('CreatorsService', () => {
       count: jest.fn(),
     },
   };
+  const prisma = mockPrismaService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({

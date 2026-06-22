@@ -5,7 +5,6 @@ import { CreatorsModule } from './creators.module';
 import { CreatorsService } from './creators.service';
 import { PrismaService } from '../common/prisma.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { PrismaService } from '../common/prisma.service';
 
 describe('Creators GET /creators/:id/earnings-history Integration', () => {
   let app: INestApplication;
@@ -136,15 +135,7 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
     onModuleDestroy: jest.fn(),
   };
 
-  const mockPrismaService = {
-    onModuleInit: jest.fn(),
-    onModuleDestroy: jest.fn(),
-  };
-
-  const mockPrismaService = {
-    onModuleInit: jest.fn(),
-    onModuleDestroy: jest.fn(),
-  };
+  const prisma = mockPrismaService;
 
   const successJwtGuard = {
     canActivate: (context: any) => {

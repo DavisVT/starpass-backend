@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -12,7 +12,7 @@ import { ListPayoutsDto } from './dto/list-payouts.dto';
 export class CreatorsService {
   private readonly logger = new Logger(CreatorsService.name);
 
-  constructor(private prisma: PrismaService, private notifications: NotificationsService) {}
+  constructor(private prisma: PrismaService, @Optional() private notifications?: NotificationsService) {}
 
   async findFeatured() {
     return this.prisma.creator.findMany({
@@ -467,7 +467,7 @@ export class CreatorsService {
 
         const fanIds = passes.map((p) => p.fanId);
 
-        if (fanIds.length > 0) {
+        if (fanIds.length > 0 && this.notifications) {
           const title = 'New content available';
           const body = `Content is now available for your pass: ${schedule.contentUrl}`;
           await this.notifications.bulkCreateForFans(fanIds, title, body, { contentUrl: schedule.contentUrl, tierId: schedule.tierId });

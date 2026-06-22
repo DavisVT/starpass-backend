@@ -14,6 +14,7 @@ describe('AdminConfigService', () => {
       findUnique: jest.fn(),
     },
   };
+  
 
   const mockStellarService = {
     emitFeeUpdatedEvent: jest.fn(),

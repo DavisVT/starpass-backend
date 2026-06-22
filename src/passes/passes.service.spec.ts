@@ -36,6 +36,7 @@ describe('PassesService', () => {
       create: jest.fn(),
     },
   };
+  
 
   const mockWebhooksService = {
     deliverPassPurchaseWebhook: jest.fn().mockResolvedValue(undefined),
