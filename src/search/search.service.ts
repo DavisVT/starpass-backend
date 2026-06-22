@@ -16,6 +16,7 @@ export class SearchService {
             { bio: { contains: q, mode: 'insensitive' } },
           ],
         },
+        orderBy: { verified: 'desc' },
         take: 10,
       }),
       this.prisma.tier.findMany({

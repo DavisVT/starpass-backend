@@ -110,7 +110,7 @@ describe('CreatorsService', () => {
 
       const result = await service.recordPayout('creator-uuid', '50.00', 'stellar-tx-abc');
 
-      expect(prisma.payout.create).toHaveBeenCalledWith({
+      expect(mockPrismaService.payout.create).toHaveBeenCalledWith({
         data: {
           creatorId: 'creator-uuid',
           amount: '50.00',
@@ -135,7 +135,7 @@ describe('CreatorsService', () => {
 
       const result = await service.recordPayout('creator-uuid', '25.00', null, 'FAILED');
 
-      expect(prisma.payout.create).toHaveBeenCalledWith({
+      expect(mockPrismaService.payout.create).toHaveBeenCalledWith({
         data: {
           creatorId: 'creator-uuid',
           amount: '25.00',
@@ -153,7 +153,7 @@ describe('CreatorsService', () => {
         service.recordPayout('nonexistent-id', '10.00'),
       ).rejects.toThrow(NotFoundException);
 
-      expect(prisma.payout.create).not.toHaveBeenCalled();
+      expect(mockPrismaService.payout.create).not.toHaveBeenCalled();
     });
   });
 
@@ -173,13 +173,13 @@ describe('CreatorsService', () => {
 
       const result = await service.getPayouts('user-uuid', 'user-uuid', { page: 1, limit: 20 });
 
-      expect(prisma.payout.findMany).toHaveBeenCalledWith({
+      expect(mockPrismaService.payout.findMany).toHaveBeenCalledWith({
         where: { creatorId: 'creator-uuid' },
         orderBy: { createdAt: 'desc' },
         skip: 0,
         take: 20,
       });
-      expect(prisma.payout.count).toHaveBeenCalledWith({ where: { creatorId: 'creator-uuid' } });
+      expect(mockPrismaService.payout.count).toHaveBeenCalledWith({ where: { creatorId: 'creator-uuid' } });
       expect(result).toEqual({ data: mockPayouts, total: 2, page: 1, limit: 20 });
     });
 
@@ -190,7 +190,7 @@ describe('CreatorsService', () => {
 
       await service.getPayouts('user-uuid', 'user-uuid', { page: 2, limit: 2 });
 
-      expect(prisma.payout.findMany).toHaveBeenCalledWith(
+      expect(mockPrismaService.payout.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ skip: 2, take: 2 }),
       );
     });
@@ -200,8 +200,8 @@ describe('CreatorsService', () => {
         service.getPayouts('user-uuid', 'different-user-uuid', { page: 1, limit: 20 }),
       ).rejects.toThrow(ForbiddenException);
 
-      expect(prisma.creator.findUnique).not.toHaveBeenCalled();
-      expect(prisma.payout.findMany).not.toHaveBeenCalled();
+      expect(mockPrismaService.creator.findUnique).not.toHaveBeenCalled();
+      expect(mockPrismaService.payout.findMany).not.toHaveBeenCalled();
     });
 
     it('should throw NotFoundException when creator record is not found', async () => {
@@ -211,7 +211,7 @@ describe('CreatorsService', () => {
         service.getPayouts('user-uuid', 'user-uuid', { page: 1, limit: 20 }),
       ).rejects.toThrow(NotFoundException);
 
-      expect(prisma.payout.findMany).not.toHaveBeenCalled();
+      expect(mockPrismaService.payout.findMany).not.toHaveBeenCalled();
     });
 
     it('should return empty data array when creator has no payouts', async () => {

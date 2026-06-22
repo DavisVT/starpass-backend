@@ -47,16 +47,30 @@ model Creator {
   registeredAt   DateTime  @map("registered_at")
   featured       Boolean   @default(false)
   featuredOrder  Int       @default(0) @map("featured_order")
+  verified       Boolean   @default(false)
+  verifiedAt     DateTime? @map("verified_at")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tiers          Tier[]
   passes         Pass[]
   blocks         Block[]
+  categories     Category[]
   webhooks       WebhookConfig[]
   payouts        Payout[]
   earningsRecords EarningsRecord[]
   @@map("creators")
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  creators  Creator[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("categories")
 }
 
 enum PayoutStatus {

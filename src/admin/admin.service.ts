@@ -23,6 +23,24 @@ export class AdminService {
     });
   }
 
+  async verifyCreator(id: string) {
+    const creator = await this.prisma.creator.findUnique({ where: { id } });
+    if (!creator) throw new NotFoundException('Creator not found');
+    return this.prisma.creator.update({
+      where: { id },
+      data: { verified: true, verifiedAt: new Date() },
+    });
+  }
+
+  async unverifyCreator(id: string) {
+    const creator = await this.prisma.creator.findUnique({ where: { id } });
+    if (!creator) throw new NotFoundException('Creator not found');
+    return this.prisma.creator.update({
+      where: { id },
+      data: { verified: false, verifiedAt: null },
+    });
+  }
+
   async getStats() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);

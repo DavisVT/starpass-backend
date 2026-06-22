@@ -89,4 +89,62 @@ export class WebhooksService {
       );
     }
   }
+
+  async deliverBundlePurchaseWebhook(creatorId: string, passesData: any[], fanAddress: string) {
+    try {
+      const webhooks = await this.prisma.webhookConfig.findMany({
+        where: { creatorId, active: true },
+      });
+
+      if (webhooks.length === 0) {
+        return;
+      }
+
+      const payload = JSON.stringify(
+        {
+          event: 'bundle_purchased',
+          fanAddress,
+          passes: passesData,
+          totalPasses: passesData.length,
+        },
+        (key, value) => (typeof value === 'bigint' ? value.toString() : value)
+      );
+
+      for (const webhook of webhooks) {
+        try {
+          const signature = crypto
+            .createHmac('sha256', webhook.secret)
+            .update(payload)
+            .digest('hex');
+
+          this.logger.log(`Delivering bundle webhook to ${webhook.url} for creator ${creatorId}`);
+
+          const response = await fetch(webhook.url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Signature': signature,
+            },
+            body: payload,
+          });
+
+          if (!response.ok) {
+            this.logger.warn(
+              `Failed to deliver bundle webhook to ${webhook.url}. Status: ${response.status} ${response.statusText}`
+            );
+          } else {
+            this.logger.log(`Successfully delivered bundle webhook to ${webhook.url}`);
+          }
+        } catch (error) {
+          this.logger.error(
+            `Error delivering bundle webhook to ${webhook.url}: ${error.message}`
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error in deliverBundlePurchaseWebhook: ${error.message}`
+      );
+    }
+  }
 }

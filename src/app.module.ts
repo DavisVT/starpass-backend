@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 import { AuthModule } from './auth/auth.module';
 import { CreatorsModule } from './creators/creators.module';
+import { CategoriesModule } from './categories/categories.module';
 import { FansModule } from './fans/fans.module';
 import { TiersModule } from './tiers/tiers.module';
 import { PassesModule } from './passes/passes.module';
@@ -37,6 +38,7 @@ import { GraphqlAppModule } from './graphql/graphql.module';
     ]),
     AuthModule,
     CreatorsModule,
+    CategoriesModule,
     FansModule,
     TiersModule,
     PassesModule,
