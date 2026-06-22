@@ -48,4 +48,62 @@ export class FansService {
       orderBy: { expiresAt: 'asc' },
     });
   }
+
+  async getActivity(
+    stellarAddress: string,
+    typeFilter: string | undefined,
+    page: number,
+    limit: number,
+  ) {
+    const fan = await this.prisma.fan.findUnique({ where: { stellarAddress } });
+    if (!fan) throw new NotFoundException('Fan not found');
+
+    const skip = (page - 1) * limit;
+    const now = new Date();
+
+    const passes = await this.prisma.pass.findMany({
+      where: { fanId: fan.id },
+      include: { tier: { select: { name: true, onChainId: true } }, creator: { select: { displayName: true, stellarAddress: true } } },
+      orderBy: { purchasedAt: 'desc' },
+    });
+
+    const events: Array<{ type: string; data: Record<string, unknown>; createdAt: Date }> = [];
+
+    for (const pass of passes) {
+      events.push({
+        type: 'pass_purchased',
+        data: {
+          passId: pass.id,
+          tierName: pass.tier.name,
+          creatorName: pass.creator.displayName,
+          creatorAddress: pass.creator.stellarAddress,
+          expiresAt: pass.expiresAt,
+        },
+        createdAt: pass.purchasedAt,
+      });
+
+      if (pass.expiresAt < now) {
+        events.push({
+          type: 'pass_expired',
+          data: {
+            passId: pass.id,
+            tierName: pass.tier.name,
+            creatorName: pass.creator.displayName,
+          },
+          createdAt: pass.expiresAt,
+        });
+      }
+    }
+
+    const filtered = typeFilter
+      ? events.filter((e) => e.type === typeFilter)
+      : events;
+
+    filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    const total = filtered.length;
+    const data = filtered.slice(skip, skip + limit);
+
+    return { data, total, page, limit };
+  }
 }
