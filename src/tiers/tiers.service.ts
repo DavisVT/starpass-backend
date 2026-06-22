@@ -5,9 +5,34 @@ import { PrismaService } from '../common/prisma.service';
 export class TiersService {
   constructor(private prisma: PrismaService) {}
 
+  async findAll(page: number, limit: number, creatorAddress?: string) {
+    const skip = (page - 1) * limit;
+
+    let creatorId: string | undefined;
+    if (creatorAddress) {
+      const creator = await this.prisma.creator.findUnique({
+        where: { stellarAddress: creatorAddress },
+        select: { id: true },
+      });
+      if (!creator) {
+        return { data: [], total: 0, page, limit };
+      }
+      creatorId = creator.id;
+    }
+
+    const where = { ...(creatorId ? { creatorId } : {}), active: true };
+
+    const [data, total] = await Promise.all([
+      this.prisma.tier.findMany({ where, skip, take: limit, orderBy: { onChainId: 'asc' } }),
+      this.prisma.tier.count({ where }),
+    ]);
+
+    return { data, total, page, limit };
+  }
+
   /**
    * Get all active tiers for a creator
-   * 
+   *
    * @param stellarAddress The Stellar public key of the creator.
    * @returns A list of active tiers for the given creator.
    * @throws {NotFoundException} If the creator is not found.
