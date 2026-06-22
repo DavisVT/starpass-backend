@@ -1,7 +1,8 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiSecurity } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AdminApiKeyGuard } from './admin-api-key.guard';
+import { FeatureCreatorDto } from './dto/feature-creator.dto';
 
 @ApiTags('admin')
 @ApiSecurity('x-admin-api-key')
@@ -16,5 +17,21 @@ export class AdminController {
   @ApiResponse({ status: 403, description: 'Invalid or missing admin API key' })
   getStats() {
     return this.adminService.getStats();
+  }
+
+  @Post('creators/:id/feature')
+  @ApiOperation({ summary: 'Feature a creator (admin only)' })
+  @ApiResponse({ status: 200, description: 'Creator featured' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  feature(@Param('id') id: string, @Body() dto: FeatureCreatorDto) {
+    return this.adminService.featureCreator(id, dto.order);
+  }
+
+  @Delete('creators/:id/feature')
+  @ApiOperation({ summary: 'Unfeature a creator (admin only)' })
+  @ApiResponse({ status: 200, description: 'Creator unfeatured' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  unfeature(@Param('id') id: string) {
+    return this.adminService.unfeatureCreator(id);
   }
 }

@@ -50,6 +50,9 @@ describe('FansService', () => {
     user: {
       delete: jest.fn(),
     },
+    earningsRecord: {
+      findMany: jest.fn(),
+    },
     $transaction: jest.fn(),
   };
 
@@ -114,6 +117,81 @@ describe('FansService', () => {
       await expect(
         service.requestDeletion(mockFan.stellarAddress),
       ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('requestDataExport', () => {
+    it('should compile and return all fan data', async () => {
+      const fanWithPasses = {
+        ...mockFan,
+        lastExportRequestedAt: null,
+        passes: [{
+          ...mockPass,
+          tier: { id: 'tier-1', name: 'VIP' },
+          creator: { id: 'creator-1', displayName: 'Creator Name' },
+        }],
+      };
+
+      const mockEarnings = [{
+        id: 'earn-1',
+        amount: 100,
+        fee: 5,
+        netAmount: 95,
+        createdAt: new Date('2024-01-01'),
+      }];
+
+      mockPrismaService.fan.findUnique.mockResolvedValue(fanWithPasses);
+      mockPrismaService.fan.update.mockResolvedValue(fanWithPasses);
+      mockPrismaService.earningsRecord.findMany.mockResolvedValue(mockEarnings);
+
+      const result = await service.requestDataExport(mockFan.stellarAddress);
+
+      expect(result.profile.stellarAddress).toBe(mockFan.stellarAddress);
+      expect(result.passes).toHaveLength(1);
+      expect(result.passes[0].tier).toBe('VIP');
+      expect(result.earnings).toHaveLength(1);
+      expect(result.earnings[0].amount).toBe(100);
+      expect(result.exportedAt).toBeDefined();
+    });
+
+    it('should throw NotFoundException when fan not found', async () => {
+      mockPrismaService.fan.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.requestDataExport('nonexistent-address'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw HttpException 429 when rate limited', async () => {
+      const recentExport = new Date();
+      const fanWithRecentExport = {
+        ...mockFan,
+        lastExportRequestedAt: recentExport,
+      };
+
+      mockPrismaService.fan.findUnique.mockResolvedValue(fanWithRecentExport);
+
+      await expect(
+        service.requestDataExport(mockFan.stellarAddress),
+      ).rejects.toThrow('Data export rate limited');
+    });
+
+    it('should allow export after 24 hours have passed', async () => {
+      const over24hAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
+      const fanWithOldExport = {
+        ...mockFan,
+        lastExportRequestedAt: over24hAgo,
+        passes: [],
+      };
+
+      mockPrismaService.fan.findUnique.mockResolvedValue(fanWithOldExport);
+      mockPrismaService.fan.update.mockResolvedValue(fanWithOldExport);
+      mockPrismaService.earningsRecord.findMany.mockResolvedValue([]);
+
+      const result = await service.requestDataExport(mockFan.stellarAddress);
+
+      expect(result.profile.stellarAddress).toBe(mockFan.stellarAddress);
+      expect(mockPrismaService.fan.update).toHaveBeenCalled();
     });
   });
 

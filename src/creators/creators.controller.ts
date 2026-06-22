@@ -19,6 +19,13 @@ export class CreatorsController {
     private webhooksService: WebhooksService,
   ) {}
 
+  @Get('featured')
+  @ApiOperation({ summary: 'Get featured creators in order' })
+  @ApiResponse({ status: 200, description: 'Return featured creators' })
+  findFeatured() {
+    return this.creatorsService.findFeatured();
+  }
+
   @Get()
   @ApiOperation({ summary: 'List all creators' })
   @ApiResponse({ status: 200, description: 'Return paginated list of creators' })

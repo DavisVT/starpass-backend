@@ -45,6 +45,8 @@ model Creator {
   avatarUrl      String?   @map("avatar_url")
   totalEarned    Decimal   @default(0) @map("total_earned")
   registeredAt   DateTime  @map("registered_at")
+  featured       Boolean   @default(false)
+  featuredOrder  Int       @default(0) @map("featured_order")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -95,6 +97,7 @@ model Fan {
   deletionRequestedAt DateTime? @map("deletion_requested_at")
   anonymized          Boolean   @default(false)
   permanentlyDeletedAt DateTime? @map("permanently_deleted_at")
+  lastExportRequestedAt DateTime? @map("last_export_requested_at")
   user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   passes              Pass[]
   @@map("fans")
@@ -180,4 +183,14 @@ model PlatformConfig {
   updatedAt   DateTime @updatedAt @map("updated_at")
   updatedBy   String?  @map("updated_by")
   @@map("platform_configs")
+}
+
+model Block {
+  id        String   @id @default(uuid())
+  creatorId String   @map("creator_id")
+  blockedAddress String @map("blocked_address")
+  createdAt DateTime @default(now()) @map("created_at")
+  creator   Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  @@unique([creatorId, blockedAddress])
+  @@map("blocks")
 }

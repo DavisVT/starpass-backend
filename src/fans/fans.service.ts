@@ -1,12 +1,13 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 
 @Injectable()
 export class FansService {
   private readonly logger = new Logger(FansService.name);
   private readonly COOLING_OFF_PERIOD_DAYS = 30;
+  private readonly EXPORT_COOLDOWN_HOURS = 24;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   /**
    * Find a fan by their Stellar address along with their active passes.
@@ -109,6 +110,87 @@ export class FansService {
     const requestedTime = new Date(fan.deletionRequestedAt).getTime();
 
     return now - requestedTime >= coolingOffPeriodMs;
+  }
+
+  /**
+   * Anonymize a fan's personal data (called after deletion request).
+   * This is typically called immediately after requestDeletion() in a scheduled job.
+   * 
+   * @param stellarAddress The Stellar public key of the fan.
+   * @throws {NotFoundException} If the fan is not found.
+   * @throws {BadRequestException} If deletion has not been requested.
+   */
+  /**
+   * Request a data export for a fan (GDPR compliance).
+   * Compiles all fan data: profile, passes, activity, favorites.
+   * Rate limited to 1 export per 24 hours.
+   *
+   * @param stellarAddress The Stellar public key of the fan.
+   * @returns The compiled fan data export.
+   * @throws {NotFoundException} If the fan is not found.
+   * @throws {TooManyRequestsException} If export was requested within the last 24 hours.
+   */
+  async requestDataExport(stellarAddress: string) {
+    const fan = await this.prisma.fan.findUnique({
+      where: { stellarAddress },
+      include: {
+        passes: {
+          include: { tier: true, creator: true },
+          orderBy: { purchasedAt: 'desc' },
+        },
+      },
+    });
+
+    if (!fan) throw new NotFoundException('Fan not found');
+
+    // Rate limit: 1 export per 24 hours
+    if (fan.lastExportRequestedAt) {
+      const cooldownMs = this.EXPORT_COOLDOWN_HOURS * 60 * 60 * 1000;
+      const elapsed = Date.now() - new Date(fan.lastExportRequestedAt).getTime();
+      if (elapsed < cooldownMs) {
+        const retryAfter = Math.ceil((cooldownMs - elapsed) / 1000);
+        throw new HttpException(
+          `Data export rate limited. Retry after ${retryAfter} seconds.`,
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+
+    // Update last export timestamp
+    await this.prisma.fan.update({
+      where: { id: fan.id },
+      data: { lastExportRequestedAt: new Date() },
+    });
+
+    // Compile all fan data
+    const earningsRecords = await this.prisma.earningsRecord.findMany({
+      where: { fanId: fan.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      exportedAt: new Date().toISOString(),
+      profile: {
+        stellarAddress: fan.stellarAddress,
+        displayName: fan.displayName,
+        createdAt: fan.createdAt,
+      },
+      passes: fan.passes.map((p) => ({
+        id: p.id,
+        tier: p.tier?.name || null,
+        creator: p.creator?.displayName || null,
+        purchasedAt: p.purchasedAt,
+        expiresAt: p.expiresAt,
+        active: p.active,
+      })),
+      earnings: earningsRecords.map((e) => ({
+        id: e.id,
+        amount: e.amount,
+        fee: e.fee,
+        netAmount: e.netAmount,
+        createdAt: e.createdAt,
+      })),
+    };
   }
 
   /**

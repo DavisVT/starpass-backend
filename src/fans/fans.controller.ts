@@ -1,4 +1,4 @@
-import { Controller, Get, Delete, Param, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FansService } from './fans.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -6,7 +6,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 @ApiTags('fans')
 @Controller({ path: 'fans', version: '1' })
 export class FansController {
-  constructor(private fansService: FansService) {}
+  constructor(private fansService: FansService) { }
 
   @Get(':address')
   @ApiOperation({ summary: 'Get fan profile by Stellar address' })
@@ -30,6 +30,16 @@ export class FansController {
   @ApiResponse({ status: 404, description: 'Fan not found' })
   getDeletionStatus(@Param('address') address: string) {
     return this.fansService.getDeletionStatus(address);
+  }
+
+  @Post(':address/data-export')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request data export (GDPR)' })
+  @ApiResponse({ status: 200, description: 'Data export compiled successfully' })
+  @ApiResponse({ status: 404, description: 'Fan not found' })
+  @ApiResponse({ status: 429, description: 'Rate limited. 1 export per 24 hours.' })
+  async requestDataExport(@Param('address') address: string) {
+    return this.fansService.requestDataExport(address);
   }
 
   @Delete(':address/account')

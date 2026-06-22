@@ -9,6 +9,13 @@ import { ListPayoutsDto } from './dto/list-payouts.dto';
 export class CreatorsService {
   constructor(private prisma: PrismaService) {}
 
+  async findFeatured() {
+    return this.prisma.creator.findMany({
+      where: { featured: true },
+      orderBy: { featuredOrder: 'asc' },
+    });
+  }
+
   async findAll(page: number, limit: number) {
     const skip = (page - 1) * limit;
     const [creators, total] = await Promise.all([

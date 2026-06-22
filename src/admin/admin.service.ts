@@ -1,9 +1,27 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 
 @Injectable()
 export class AdminService {
   constructor(private prisma: PrismaService) {}
+
+  async featureCreator(id: string, order: number) {
+    const creator = await this.prisma.creator.findUnique({ where: { id } });
+    if (!creator) throw new NotFoundException('Creator not found');
+    return this.prisma.creator.update({
+      where: { id },
+      data: { featured: true, featuredOrder: order },
+    });
+  }
+
+  async unfeatureCreator(id: string) {
+    const creator = await this.prisma.creator.findUnique({ where: { id } });
+    if (!creator) throw new NotFoundException('Creator not found');
+    return this.prisma.creator.update({
+      where: { id },
+      data: { featured: false, featuredOrder: 0 },
+    });
+  }
 
   async getStats() {
     const today = new Date();
