@@ -6,7 +6,7 @@ import { ReportsService } from './reports.service';
 import { PrismaService } from '../common/prisma.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
-import { ReportStatus, ReportTargetType } from '@prisma/client';
+// Use string literals for report enums in tests to avoid runtime dependency on @prisma/client
 
 describe('Reports Integration', () => {
   let app: INestApplication;
@@ -15,10 +15,10 @@ describe('Reports Integration', () => {
     {
       id: 'report-1',
       reporterId: 'user-1',
-      targetType: ReportTargetType.CREATOR,
+      targetType: 'CREATOR',
       targetId: 'creator-1',
       reason: 'Inappropriate content',
-      status: ReportStatus.PENDING,
+      status: 'PENDING',
       createdAt: new Date(),
       updatedAt: new Date(),
       reporter: { id: 'user-1', role: 'FAN' },
@@ -26,10 +26,10 @@ describe('Reports Integration', () => {
     {
       id: 'report-2',
       reporterId: 'user-2',
-      targetType: ReportTargetType.TIER,
+      targetType: 'TIER',
       targetId: 'tier-1',
       reason: 'Misleading description',
-      status: ReportStatus.RESOLVED,
+      status: 'RESOLVED',
       createdAt: new Date(),
       updatedAt: new Date(),
       reporter: { id: 'user-2', role: 'FAN' },
@@ -44,7 +44,7 @@ describe('Reports Integration', () => {
       page: 1,
       limit: 20,
     }),
-    updateStatus: jest.fn().mockResolvedValue({ ...mockReports[0], status: ReportStatus.DISMISSED }),
+    updateStatus: jest.fn().mockResolvedValue({ ...mockReports[0], status: 'DISMISSED' }),
   };
 
   const mockReqUser = { sub: 'user-123', address: 'G...', role: 'FAN' };
@@ -100,7 +100,7 @@ describe('Reports Integration', () => {
       const res = await request(app.getHttpServer())
         .post('/reports')
         .send({
-          targetType: ReportTargetType.CREATOR,
+          targetType: 'CREATOR',
           targetId: 'creator-1',
           reason: 'Inappropriate content',
         })
@@ -132,12 +132,12 @@ describe('Reports Integration', () => {
       const res = await request(app.getHttpServer())
         .patch('/admin/reports/report-1')
         .send({
-          status: ReportStatus.DISMISSED,
+          status: 'DISMISSED',
         })
         .expect(200);
 
-      expect(mockReportsService.updateStatus).toHaveBeenCalledWith('report-1', ReportStatus.DISMISSED);
-      expect(res.body.status).toEqual(ReportStatus.DISMISSED);
+      expect(mockReportsService.updateStatus).toHaveBeenCalledWith('report-1', 'DISMISSED');
+      expect(res.body.status).toEqual('DISMISSED');
     });
   });
 });

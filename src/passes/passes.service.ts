@@ -15,8 +15,8 @@ export class PassesService {
     private prisma: PrismaService,
     private webhooksService: WebhooksService,
     private emailService: EmailService,
-    @Optional() private tiersService?: TiersService,
     private adminConfigService: AdminConfigService,
+    @Optional() private tiersService?: TiersService,
     @Optional() private metricsService?: MetricsService,
   ) {}
 
@@ -265,9 +265,11 @@ export class PassesService {
       const fee = 0;
       const netAmount = amount - fee;
 
-      // Track metrics
-      this.metricsService.incActivePasses(creator.stellarAddress);
-      this.metricsService.incRevenue(creator.stellarAddress, amount);
+      // Track metrics if metricsService is available
+      if (this.metricsService) {
+        this.metricsService.incActivePasses(creator.stellarAddress);
+        this.metricsService.incRevenue(creator.stellarAddress, amount);
+      }
 
       this.prisma.earningsRecord.create({
         data: {
