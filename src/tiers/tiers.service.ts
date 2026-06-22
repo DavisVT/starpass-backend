@@ -3,28 +3,22 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { EmailService } from '../notifications/email.service';
+import { CreateTierDto } from './dto/create-tier.dto';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
 
 const UNLOCK_TTL_SECONDS = 15 * 60; // 15 minutes
 
-export interface CreateTierDto {
-  onChainId: number;
-  name: string;
-  description?: string;
-  priceUsdc: string;
-  durationDays: number;
-  maxSupply?: number;
-  active?: boolean;
-}
-
 @Injectable()
 export class TiersService {
   constructor(
     private prisma: PrismaService,
-    private config: ConfigService,
+    @Optional() private config?: ConfigService,
   ) {}
 
   /**
@@ -152,10 +146,30 @@ export class TiersService {
     });
   }
 
+  async findAll(page: number, limit: number, creatorId?: string) {
+    const skip = (page - 1) * limit;
+    const where: any = {};
+    if (creatorId) where.creatorId = creatorId;
+
+    const [data, total] = await Promise.all([
+      this.prisma.tier.findMany({ where, skip, take: limit, orderBy: { onChainId: 'asc' } }),
+      this.prisma.tier.count({ where }),
+    ]);
+
+    return { data, total, page, limit };
+  }
+
+  async findByCreatorAddressPaginated(creatorAddress: string, page: number, limit: number) {
+    const creator = await this.prisma.creator.findUnique({ where: { stellarAddress: creatorAddress } });
+    if (!creator) throw new NotFoundException('Creator not found');
+
+    return this.findAll(page, limit, creator.id);
+  }
+
   // ── Content unlock ────────────────────────────────────────────────────────
 
   private sign(payload: string): string {
-    const secret = this.config.get<string>('CONTENT_URL_SECRET')!;
+    const secret = this.config?.get<string>('CONTENT_URL_SECRET') ?? process.env.CONTENT_URL_SECRET!;
     return createHmac('sha256', secret).update(payload).digest('hex');
   }
 

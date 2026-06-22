@@ -47,16 +47,30 @@ model Creator {
   registeredAt   DateTime  @map("registered_at")
   featured       Boolean   @default(false)
   featuredOrder  Int       @default(0) @map("featured_order")
+  verified       Boolean   @default(false)
+  verifiedAt     DateTime? @map("verified_at")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tiers          Tier[]
   passes         Pass[]
   blocks         Block[]
+  categories     Category[]
   webhooks       WebhookConfig[]
   payouts        Payout[]
   earningsRecords EarningsRecord[]
   @@map("creators")
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  creators  Creator[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("categories")
 }
 
 enum PayoutStatus {
@@ -209,4 +223,34 @@ model Block {
   creator   Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   @@unique([creatorId, blockedAddress])
   @@map("blocks")
+}
+
+model ContentSchedule {
+  id         String   @id @default(uuid())
+  creatorId  String   @map("creator_id")
+  tierId     String   @map("tier_id")
+  contentUrl String   @map("content_url")
+  availableAt DateTime @map("available_at")
+  active     Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  creator    Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  tier       Tier     @relation(fields: [tierId], references: [id])
+
+  @@map("content_schedules")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  fanId     String   @map("fan_id")
+  title     String
+  body      String
+  data      Json?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  fan       Fan      @relation(fields: [fanId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
 }

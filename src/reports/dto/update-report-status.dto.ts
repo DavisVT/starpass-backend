@@ -1,9 +1,8 @@
-import { IsEnum } from 'class-validator';
-import { ReportStatus } from '@prisma/client';
+import { IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateReportStatusDto {
-  @ApiProperty({ enum: ReportStatus })
-  @IsEnum(ReportStatus)
-  status: ReportStatus;
+  @ApiProperty({ enum: ['PENDING', 'OPEN', 'RESOLVED', 'DISMISSED'] })
+  @IsIn(['PENDING', 'OPEN', 'RESOLVED', 'DISMISSED'])
+  status: string;
 }

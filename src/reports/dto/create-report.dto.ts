@@ -1,11 +1,10 @@
-import { IsEnum, IsString, IsNotEmpty } from 'class-validator';
-import { ReportTargetType } from '@prisma/client';
+import { IsString, IsNotEmpty, IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateReportDto {
-  @ApiProperty({ enum: ReportTargetType })
-  @IsEnum(ReportTargetType)
-  targetType: ReportTargetType;
+  @ApiProperty({ enum: ['PASS', 'CREATOR', 'TIER'] })
+  @IsIn(['PASS', 'CREATOR', 'TIER'])
+  targetType: string;
 
   @ApiProperty()
   @IsString()

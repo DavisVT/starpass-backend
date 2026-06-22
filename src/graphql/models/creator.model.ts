@@ -27,6 +27,12 @@ export class Creator {
   registeredAt: Date;
 
   @Field()
+  verified: boolean;
+
+  @Field({ nullable: true })
+  verifiedAt?: Date;
+
+  @Field()
   createdAt: Date;
 
   @Field()

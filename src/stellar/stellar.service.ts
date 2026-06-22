@@ -1,4 +1,4 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as StellarSdk from '@stellar/stellar-sdk';
 
@@ -15,10 +15,10 @@ export class StellarService {
   private consecutiveFailures = 0;
   private circuitOpen = false;
 
-  constructor(private config: ConfigService) {
-    const rpcUrl = this.config.get('STELLAR_RPC_URL') || 'https://soroban-testnet.stellar.org';
+  constructor(@Optional() private config?: ConfigService) {
+    const rpcUrl = this.config?.get('STELLAR_RPC_URL') || process.env.STELLAR_RPC_URL || 'https://soroban-testnet.stellar.org';
     this.server = new StellarSdk.rpc.Server(rpcUrl);
-    this.contractId = this.config.get('STARPASS_CONTRACT_ID') || '';
+    this.contractId = this.config?.get('STARPASS_CONTRACT_ID') || process.env.STARPASS_CONTRACT_ID || '';
   }
 
   private async withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {

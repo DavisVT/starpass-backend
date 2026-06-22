@@ -55,6 +55,8 @@ describe('FansController (Integration)', () => {
     it('should return fan profile', async () => {
       const expectedFan = {
         ...mockFan,
+        createdAt: mockFan.createdAt.toISOString(),
+        updatedAt: mockFan.updatedAt.toISOString(),
         passes: [],
       };
 
@@ -164,7 +166,7 @@ describe('FansController (Integration)', () => {
     it('should return data export', async () => {
       const exportData = {
         exportedAt: new Date().toISOString(),
-        profile: { stellarAddress: mockFan.stellarAddress, displayName: mockFan.displayName, createdAt: mockFan.createdAt },
+        profile: { stellarAddress: mockFan.stellarAddress, displayName: mockFan.displayName, createdAt: mockFan.createdAt.toISOString() },
         passes: [],
         earnings: [],
       };
@@ -200,7 +202,9 @@ describe('FansController (Integration)', () => {
     it('should request account deletion and return 202 Accepted', async () => {
       const deletionRequest = {
         ...mockFan,
-        deletionRequestedAt: new Date(),
+        createdAt: mockFan.createdAt.toISOString(),
+        updatedAt: mockFan.updatedAt.toISOString(),
+        deletionRequestedAt: new Date().toISOString(),
       };
 
       mockFansService.requestDeletion.mockResolvedValue(deletionRequest);

@@ -34,4 +34,20 @@ export class AdminController {
   unfeature(@Param('id') id: string) {
     return this.adminService.unfeatureCreator(id);
   }
+
+  @Post('creators/:id/verify')
+  @ApiOperation({ summary: 'Verify a creator (admin only)' })
+  @ApiResponse({ status: 200, description: 'Creator verified' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  verify(@Param('id') id: string) {
+    return this.adminService.verifyCreator(id);
+  }
+
+  @Delete('creators/:id/verify')
+  @ApiOperation({ summary: 'Unverify a creator (admin only)' })
+  @ApiResponse({ status: 200, description: 'Creator unverified' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  unverify(@Param('id') id: string) {
+    return this.adminService.unverifyCreator(id);
+  }
 }
