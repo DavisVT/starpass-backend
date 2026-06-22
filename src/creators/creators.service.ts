@@ -79,6 +79,45 @@ export class CreatorsService {
    * @returns An object containing the creator's stellar address, total earnings, and pass count.
    * @throws {NotFoundException} If the creator is not found.
    */
+  async getOnboarding(stellarAddress: string) {
+    const creator = await this.prisma.creator.findUnique({
+      where: { stellarAddress },
+      include: {
+        tiers: { where: { active: true }, take: 1, select: { createdAt: true } },
+        passes: { take: 1, select: { purchasedAt: true }, orderBy: { purchasedAt: 'asc' } },
+      },
+    });
+    if (!creator) throw new NotFoundException('Creator not found');
+
+    const profileComplete = !!(creator.displayName && creator.bio);
+    const avatarUploaded = !!creator.avatarUrl;
+    const tierCreated = creator.tiers.length > 0;
+    const firstPassSold = creator.passes.length > 0;
+
+    return [
+      {
+        item: 'profile_complete',
+        completed: profileComplete,
+        completedAt: profileComplete ? creator.updatedAt : null,
+      },
+      {
+        item: 'avatar_uploaded',
+        completed: avatarUploaded,
+        completedAt: avatarUploaded ? creator.updatedAt : null,
+      },
+      {
+        item: 'tier_created',
+        completed: tierCreated,
+        completedAt: tierCreated ? creator.tiers[0].createdAt : null,
+      },
+      {
+        item: 'first_pass_sold',
+        completed: firstPassSold,
+        completedAt: firstPassSold ? creator.passes[0].purchasedAt : null,
+      },
+    ];
+  }
+
   async getEarnings(stellarAddress: string) {
     const creator = await this.prisma.creator.findUnique({ where: { stellarAddress } });
     if (!creator) throw new NotFoundException('Creator not found');

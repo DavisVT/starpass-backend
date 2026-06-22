@@ -55,6 +55,14 @@ export class CreatorsController {
     return this.creatorsService.update(req.user.address, dto);
   }
 
+  @Get(':address/onboarding')
+  @ApiOperation({ summary: 'Get creator onboarding checklist status' })
+  @ApiResponse({ status: 200, description: 'Return checklist items with completion status' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  getOnboarding(@Param('address') address: string) {
+    return this.creatorsService.getOnboarding(address);
+  }
+
   @Get(':address/earnings')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
