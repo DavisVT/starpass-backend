@@ -4,9 +4,10 @@ import { PassesService } from './passes.service';
 import { AuthModule } from '../auth/auth.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PrismaModule } from '../common/prisma.module';
 
 @Module({
-  imports: [AuthModule, WebhooksModule, NotificationsModule],
+  imports: [AuthModule, WebhooksModule, NotificationsModule, PrismaModule],
   controllers: [PassesController],
   providers: [PassesService],
   exports: [PassesService],

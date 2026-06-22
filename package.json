@@ -24,6 +24,7 @@
     "@nestjs/jwt": "^10.2.0",
     "@nestjs/platform-express": "^10.3.0",
     "@nestjs/swagger": "^7.3.0",
+    "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^5.8.0",
     "@stellar/stellar-sdk": "^12.1.0",
     "class-transformer": "^0.5.1",
