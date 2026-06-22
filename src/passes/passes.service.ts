@@ -1,10 +1,11 @@
-import { ForbiddenException, Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { ListPassesDto } from './dto/list-passes.dto';
 import { EmailService } from '../notifications/email.service';
 import { TiersService } from '../tiers/tiers.service';
 import { AdminConfigService } from '../admin/admin-config.service';
+import { MetricsService } from '../metrics/metrics.service';
 
 @Injectable()
 export class PassesService {
@@ -16,6 +17,7 @@ export class PassesService {
     private emailService: EmailService,
     private tiersService: TiersService,
     private adminConfigService: AdminConfigService,
+    private metricsService: MetricsService,
   ) {}
 
   /**
@@ -389,5 +391,172 @@ export class PassesService {
       page,
       limit,
     };
+  }
+
+  /**
+   * Purchase multiple passes in a single atomic transaction
+   *
+   * @param tierIds Array of tier IDs to purchase passes for (max 5).
+   * @param fanAddress The Stellar public key of the fan making the purchase.
+   * @returns Array of created passes.
+   * @throws {BadRequestException} If any tier IDs are invalid or inactive.
+   */
+  async purchaseBundle(tierIds: number[], fanAddress: string) {
+    // Validate all tiers exist and are active
+    const tiers = await this.prisma.tier.findMany({
+      where: {
+        onChainId: { in: tierIds },
+        active: true,
+      },
+      include: { creator: true },
+    });
+
+    if (tiers.length !== tierIds.length) {
+      const foundIds = tiers.map((t) => t.onChainId);
+      const invalidIds = tierIds.filter((id) => !foundIds.includes(id));
+      throw new BadRequestException(
+        `Invalid or inactive tier IDs: ${invalidIds.join(', ')}`,
+      );
+    }
+
+    // Group tiers by creator to check for blocks
+    const creators = new Map<string, typeof tiers[0]['creator']>();
+    for (const tier of tiers) {
+      if (!creators.has(tier.creatorId)) {
+        creators.set(tier.creatorId, tier.creator);
+      }
+    }
+
+    // Check if fan is blocked by any creator
+    const blocks = await this.prisma.block.findMany({
+      where: {
+        blockedAddress: fanAddress,
+        creatorId: { in: Array.from(creators.keys()) },
+      },
+    });
+
+    if (blocks.length > 0) {
+      throw new ForbiddenException('Fan is blocked by one or more creators');
+    }
+
+    // Upsert fan
+    const fan = await this.prisma.fan.upsert({
+      where: { stellarAddress: fanAddress },
+      update: {},
+      create: {
+        stellarAddress: fanAddress,
+        user: {
+          connectOrCreate: {
+            where: { stellarAddress: fanAddress },
+            create: { stellarAddress: fanAddress },
+          },
+        },
+      },
+    });
+
+    const now = new Date();
+    const purchasedAt = now;
+
+    // Create all passes atomically using Prisma transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      const createdPasses: any[] = [];
+
+      for (const tier of tiers) {
+        const expiresAt = new Date(
+          purchasedAt.getTime() + tier.durationDays * 24 * 60 * 60 * 1000,
+        );
+
+        // Generate a unique on-chain ID for the pass (simulated)
+        const onChainId = BigInt(Date.now()) + BigInt(Math.floor(Math.random() * 1000000));
+
+        const pass = await tx.pass.create({
+          data: {
+            onChainId,
+            tierId: tier.id,
+            creatorId: tier.creatorId,
+            fanId: fan.id,
+            purchasedAt,
+            expiresAt,
+            syncedAt: now,
+          },
+          include: {
+            tier: true,
+            creator: true,
+          },
+        });
+
+        createdPasses.push(pass);
+
+        // Record earnings for each pass
+        const amount = Number(tier.priceUsdc);
+        const fee = 0;
+        const netAmount = amount - fee;
+
+        await tx.earningsRecord.create({
+          data: {
+            creatorId: tier.creatorId,
+            fanId: fan.id,
+            tierId: tier.id,
+            amount,
+            fee,
+            netAmount,
+          },
+        });
+      }
+
+      return createdPasses;
+    });
+
+    // Emit bundle_purchased event via webhooks and emails (fire and forget)
+    this.emitBundlePurchasedEvent(result, fanAddress);
+
+    return result;
+  }
+
+  /**
+   * Emit bundle_purchased event via webhooks and emails
+   */
+  private emitBundlePurchasedEvent(passes: any[], fanAddress: string) {
+    // Group passes by creator for webhook/email delivery
+    const byCreator = new Map<string, any[]>();
+    for (const pass of passes) {
+      const creatorId = pass.creatorId;
+      if (!byCreator.has(creatorId)) {
+        byCreator.set(creatorId, []);
+      }
+      byCreator.get(creatorId)!.push(pass);
+    }
+
+    // Deliver webhooks and emails for each creator
+    for (const [creatorId, creatorPasses] of byCreator) {
+      const creator = creatorPasses[0].creator;
+
+      // Deliver webhook
+      this.webhooksService
+        .deliverBundlePurchaseWebhook(creatorId, creatorPasses, fanAddress)
+        .catch((err) => {
+          this.logger.error(`Error triggering bundle webhook: ${err.message}`);
+        });
+
+      // Send email notification
+      if (creator.email) {
+        const tierNames = creatorPasses.map((p) => p.tier.name).join(', ');
+        const totalPrice = creatorPasses
+          .reduce((sum, p) => sum + Number(p.tier.priceUsdc), 0)
+          .toFixed(2);
+
+        this.emailService
+          .sendBundlePurchaseEmail(
+            creator.email,
+            fanAddress,
+            tierNames,
+            totalPrice,
+            creatorPasses.length,
+          )
+          .catch((err) => {
+            this.logger.error(`Error triggering bundle email: ${err.message}`);
+          });
+      }
+    }
   }
 }
