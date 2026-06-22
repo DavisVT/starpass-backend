@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Param, ParseIntPipe, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Param, Query, ParseIntPipe, UseGuards, Request } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { TiersService } from './tiers.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
@@ -57,26 +57,22 @@ export class TiersController {
     return this.tiersService.findOne(address, onChainId);
   }
 
-  @Post(':id/waitlist')
+  @Post(':id/content/unlock')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Join the waitlist for a sold-out tier' })
-  @ApiResponse({ status: 201, description: 'Successfully joined waitlist' })
-  @ApiResponse({ status: 400, description: 'Tier is not sold out or no limited supply' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiOperation({ summary: 'Unlock content for a pass holder — returns a signed temporary URL token' })
+  @ApiResponse({ status: 201, description: 'Content unlock token issued' })
+  @ApiResponse({ status: 403, description: 'No valid pass for this tier' })
   @ApiResponse({ status: 404, description: 'Tier not found' })
-  joinWaitlist(@Param('id') id: string, @Request() req: any) {
-    return this.tiersService.joinWaitlist(id, req.user.address);
+  unlock(@Param('id') id: string, @Request() req: any) {
+    return this.tiersService.unlockContent(id, req.user.address);
   }
 
-  @Get(':id/waitlist/position')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get your position on the waitlist' })
-  @ApiResponse({ status: 200, description: 'Return waitlist position and total' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 404, description: 'Tier not found or not on waitlist' })
-  getWaitlistPosition(@Param('id') id: string, @Request() req: any) {
-    return this.tiersService.getWaitlistPosition(id, req.user.address);
+  @Get(':id/content/verify')
+  @ApiOperation({ summary: 'Verify a content unlock token' })
+  @ApiQuery({ name: 'token', required: true })
+  @ApiResponse({ status: 200, description: 'Token validity result' })
+  verify(@Param('id') id: string, @Query('token') token: string) {
+    return this.tiersService.verifyContentToken(id, token);
   }
 }
