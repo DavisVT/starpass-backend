@@ -43,6 +43,9 @@ model Creator {
   displayName    String   @map("display_name")
   bio            String?
   avatarUrl      String?  @map("avatar_url")
+  twitterUrl     String?  @map("twitter_url")
+  instagramUrl   String?  @map("instagram_url")
+  websiteUrl     String?  @map("website_url")
   totalEarned    Decimal  @default(0) @map("total_earned")
   registeredAt   DateTime @map("registered_at")
   createdAt      DateTime @default(now()) @map("created_at")

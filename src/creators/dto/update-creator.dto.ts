@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsUrl, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateCreatorDto {
@@ -17,5 +17,24 @@ export class UpdateCreatorDto {
   @ApiPropertyOptional({ description: 'Updated avatar image URL', example: 'https://example.com/avatar.png' })
   @IsString()
   @IsOptional()
+  @IsUrl()
   avatarUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Twitter/X profile URL', example: 'https://twitter.com/username' })
+  @IsString()
+  @IsOptional()
+  @IsUrl()
+  twitterUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Instagram profile URL', example: 'https://instagram.com/username' })
+  @IsString()
+  @IsOptional()
+  @IsUrl()
+  instagramUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Personal or project website URL', example: 'https://mysite.com' })
+  @IsString()
+  @IsOptional()
+  @IsUrl()
+  websiteUrl?: string;
 }
