@@ -6,9 +6,10 @@ import { WebhooksModule } from '../webhooks/webhooks.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { TiersModule } from '../tiers/tiers.module';
 import { AdminModule } from '../admin/admin.module';
+import { MetricsModule } from '../metrics/metrics.module';
 
 @Module({
-  imports: [AuthModule, WebhooksModule, NotificationsModule, forwardRef(() => TiersModule), AdminModule],
+  imports: [AuthModule, WebhooksModule, NotificationsModule, forwardRef(() => TiersModule), AdminModule, MetricsModule],
   controllers: [PassesController],
   providers: [PassesService],
   exports: [PassesService],

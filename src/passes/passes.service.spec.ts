@@ -1,10 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PassesService } from './passes.service';
 import { PrismaService } from '../common/prisma.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { EmailService } from '../notifications/email.service';
 import { AdminConfigService } from '../admin/admin-config.service';
+import { MetricsService } from '../metrics/metrics.service';
+import { TiersService } from '../tiers/tiers.service';
 
 describe('PassesService', () => {
   let service: PassesService;
@@ -17,6 +19,7 @@ describe('PassesService', () => {
     },
     tier: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
     },
     fan: {
       findUnique: jest.fn(),
@@ -28,22 +31,43 @@ describe('PassesService', () => {
       count: jest.fn(),
       findMany: jest.fn(),
       findFirst: jest.fn(),
+      create: jest.fn(),
     },
     block: {
       findUnique: jest.fn(),
+      findMany: jest.fn(),
     },
+    earningsRecord: {
+      create: jest.fn(),
+    },
+    $transaction: jest.fn(),
   };
 
   const mockWebhooksService = {
     deliverPassPurchaseWebhook: jest.fn().mockResolvedValue(undefined),
+    deliverBundlePurchaseWebhook: jest.fn().mockResolvedValue(undefined),
   };
 
   const mockEmailService = {
     sendPassPurchaseEmail: jest.fn().mockResolvedValue(undefined),
+    sendBundlePurchaseEmail: jest.fn().mockResolvedValue(undefined),
   };
 
   const mockAdminConfigService = {
     getCurrentFeeBps: jest.fn().mockResolvedValue(250),
+  };
+
+  const mockMetricsService = {
+    incActivePasses: jest.fn(),
+    incRevenue: jest.fn(),
+  };
+
+  const mockTiersService = {
+    findByCreator: jest.fn(),
+    findOne: jest.fn(),
+    upsertFromChain: jest.fn(),
+    unlockContent: jest.fn(),
+    verifyContentToken: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -54,6 +78,8 @@ describe('PassesService', () => {
         { provide: WebhooksService, useValue: mockWebhooksService },
         { provide: EmailService, useValue: mockEmailService },
         { provide: AdminConfigService, useValue: mockAdminConfigService },
+        { provide: MetricsService, useValue: mockMetricsService },
+        { provide: TiersService, useValue: mockTiersService },
       ],
     }).compile();
 
@@ -158,7 +184,7 @@ describe('PassesService', () => {
       mockPrismaService.block.findUnique.mockResolvedValue({
         id: 'block-uuid',
         creatorId: mockCreator.id,
-        fanAddress: mockData.fanAddress,
+        blockedAddress: mockData.fanAddress,
       });
 
       await expect(service.upsertFromChain(mockData)).rejects.toBeInstanceOf(
@@ -166,9 +192,9 @@ describe('PassesService', () => {
       );
       expect(prisma.block.findUnique).toHaveBeenCalledWith({
         where: {
-          creatorId_fanAddress: {
+          creatorId_blockedAddress: {
             creatorId: mockCreator.id,
-            fanAddress: mockData.fanAddress,
+            blockedAddress: mockData.fanAddress,
           },
         },
       });
@@ -348,6 +374,219 @@ describe('PassesService', () => {
         where: {
           active: false,
           expiresAt: { lte: expect.any(Date) },
+        },
+      });
+    });
+  });
+
+  describe('purchaseBundle', () => {
+    const fanAddress = 'GB_FAN';
+    const mockFan = { id: 'fan-uuid', stellarAddress: fanAddress };
+    
+    const mockTiers = [
+      { 
+        id: 'tier-1', 
+        onChainId: 1, 
+        creatorId: 'creator-uuid', 
+        priceUsdc: '10.00',
+        durationDays: 30,
+        creator: { id: 'creator-uuid', stellarAddress: 'GB_CREATOR', email: 'creator@test.com' },
+      },
+      { 
+        id: 'tier-2', 
+        onChainId: 2, 
+        creatorId: 'creator-uuid', 
+        priceUsdc: '20.00',
+        durationDays: 30,
+        creator: { id: 'creator-uuid', stellarAddress: 'GB_CREATOR', email: 'creator@test.com' },
+      },
+    ];
+
+    const mockCreatedPasses = [
+      { id: 'pass-1', onChainId: BigInt(1), tierId: 'tier-1', creatorId: 'creator-uuid', fanId: 'fan-uuid', tier: mockTiers[0], creator: mockTiers[0].creator },
+      { id: 'pass-2', onChainId: BigInt(2), tierId: 'tier-2', creatorId: 'creator-uuid', fanId: 'fan-uuid', tier: mockTiers[1], creator: mockTiers[1].creator },
+    ];
+
+    beforeEach(() => {
+      mockPrismaService.fan.upsert.mockResolvedValue(mockFan);
+    });
+
+    it('should create all passes atomically for valid tier IDs', async () => {
+      mockPrismaService.tier.findMany.mockResolvedValue(mockTiers);
+      mockPrismaService.block.findMany.mockResolvedValue([]);
+      
+      const transactionMock = jest.fn().mockImplementation(async (cb) => {
+        const txMock = {
+          pass: {
+            create: jest.fn()
+              .mockResolvedValueOnce(mockCreatedPasses[0])
+              .mockResolvedValueOnce(mockCreatedPasses[1]),
+          },
+          earningsRecord: {
+            create: jest.fn().mockResolvedValue({}),
+          },
+        };
+        return cb(txMock);
+      });
+      mockPrismaService.$transaction = transactionMock;
+
+      const result = await service.purchaseBundle([1, 2], fanAddress);
+
+      expect(prisma.tier.findMany).toHaveBeenCalledWith({
+        where: {
+          onChainId: { in: [1, 2] },
+          active: true,
+        },
+        include: { creator: true },
+      });
+      expect(prisma.block.findMany).toHaveBeenCalledWith({
+        where: {
+          blockedAddress: fanAddress,
+          creatorId: { in: ['creator-uuid'] },
+        },
+      });
+      expect(result).toHaveLength(2);
+    });
+
+    it('should return 400 with details for partial invalid tier IDs', async () => {
+      mockPrismaService.tier.findMany.mockResolvedValue([mockTiers[0]]); // Only one tier found
+
+      await expect(service.purchaseBundle([1, 999], fanAddress)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      
+      await expect(service.purchaseBundle([1, 999], fanAddress)).rejects.toThrow(
+        'Invalid or inactive tier IDs: 999',
+      );
+    });
+
+    it('should return 400 when all tier IDs are invalid', async () => {
+      mockPrismaService.tier.findMany.mockResolvedValue([]);
+
+      await expect(service.purchaseBundle([999, 888], fanAddress)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('should throw ForbiddenException when fan is blocked by creator', async () => {
+      mockPrismaService.tier.findMany.mockResolvedValue(mockTiers);
+      mockPrismaService.block.findMany.mockResolvedValue([{ 
+        id: 'block-uuid', 
+        creatorId: 'creator-uuid', 
+        fanAddress 
+      }]);
+
+      await expect(service.purchaseBundle([1, 2], fanAddress)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      await expect(service.purchaseBundle([1, 2], fanAddress)).rejects.toThrow(
+        'Fan is blocked by one or more creators',
+      );
+    });
+
+    it('should rollback all passes on failure within transaction', async () => {
+      mockPrismaService.tier.findMany.mockResolvedValue(mockTiers);
+      mockPrismaService.block.findMany.mockResolvedValue([]);
+      
+      const transactionMock = jest.fn().mockImplementation(async (cb) => {
+        const txMock = {
+          pass: {
+            create: jest.fn()
+              .mockResolvedValueOnce(mockCreatedPasses[0])
+              .mockRejectedValueOnce(new Error('Database error')),
+          },
+          earningsRecord: {
+            create: jest.fn().mockResolvedValue({}),
+          },
+        };
+        return cb(txMock);
+      });
+      mockPrismaService.$transaction = transactionMock;
+
+      await expect(service.purchaseBundle([1, 2], fanAddress)).rejects.toThrow('Database error');
+    });
+
+    it('should emit bundle_purchased event via webhooks', async () => {
+      mockPrismaService.tier.findMany.mockResolvedValue(mockTiers);
+      mockPrismaService.block.findMany.mockResolvedValue([]);
+      
+      const transactionMock = jest.fn().mockImplementation(async (cb) => {
+        const txMock = {
+          pass: {
+            create: jest.fn()
+              .mockResolvedValueOnce(mockCreatedPasses[0])
+              .mockResolvedValueOnce(mockCreatedPasses[1]),
+          },
+          earningsRecord: {
+            create: jest.fn().mockResolvedValue({}),
+          },
+        };
+        return cb(txMock);
+      });
+      mockPrismaService.$transaction = transactionMock;
+
+      await service.purchaseBundle([1, 2], fanAddress);
+
+      // Wait for async webhook delivery
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
+      expect(webhooksService.deliverBundlePurchaseWebhook).toHaveBeenCalledWith(
+        'creator-uuid',
+        expect.any(Array),
+        fanAddress,
+      );
+    });
+
+    it('should handle tiers from different creators', async () => {
+      const multiCreatorTiers = [
+        { 
+          id: 'tier-1', 
+          onChainId: 1, 
+          creatorId: 'creator-1', 
+          priceUsdc: '10.00',
+          durationDays: 30,
+          creator: { id: 'creator-1', stellarAddress: 'GB_CREATOR_1', email: 'creator1@test.com' },
+        },
+        { 
+          id: 'tier-2', 
+          onChainId: 2, 
+          creatorId: 'creator-2', 
+          priceUsdc: '20.00',
+          durationDays: 30,
+          creator: { id: 'creator-2', stellarAddress: 'GB_CREATOR_2', email: 'creator2@test.com' },
+        },
+      ];
+      
+      mockPrismaService.tier.findMany.mockResolvedValue(multiCreatorTiers);
+      mockPrismaService.block.findMany.mockResolvedValue([]);
+      
+      const multiCreatorPasses = [
+        { id: 'pass-1', onChainId: BigInt(1), tierId: 'tier-1', creatorId: 'creator-1', fanId: 'fan-uuid', tier: multiCreatorTiers[0], creator: multiCreatorTiers[0].creator },
+        { id: 'pass-2', onChainId: BigInt(2), tierId: 'tier-2', creatorId: 'creator-2', fanId: 'fan-uuid', tier: multiCreatorTiers[1], creator: multiCreatorTiers[1].creator },
+      ];
+      
+      const transactionMock = jest.fn().mockImplementation(async (cb) => {
+        const txMock = {
+          pass: {
+            create: jest.fn()
+              .mockResolvedValueOnce(multiCreatorPasses[0])
+              .mockResolvedValueOnce(multiCreatorPasses[1]),
+          },
+          earningsRecord: {
+            create: jest.fn().mockResolvedValue({}),
+          },
+        };
+        return cb(txMock);
+      });
+      mockPrismaService.$transaction = transactionMock;
+
+      const result = await service.purchaseBundle([1, 2], fanAddress);
+
+      expect(result).toHaveLength(2);
+      expect(prisma.block.findMany).toHaveBeenCalledWith({
+        where: {
+          blockedAddress: fanAddress,
+          creatorId: { in: ['creator-1', 'creator-2'] },
         },
       });
     });
