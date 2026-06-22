@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@ne
 import { CreatorsService } from './creators.service';
 import { CreateCreatorDto } from './dto/create-creator.dto';
 import { UpdateCreatorDto } from './dto/update-creator.dto';
+import { BlockFanDto } from './dto/block-fan.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { RegisterWebhookDto } from '../webhooks/dto/register-webhook.dto';
@@ -97,6 +98,43 @@ export class CreatorsController {
     }
 
     return this.creatorsService.getAnalytics(id, period);
+  }
+
+  @Post(':id/blocks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Block a fan from purchasing passes from this creator' })
+  @ApiResponse({ status: 201, description: 'Fan blocked' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Not your creator profile' })
+  @ApiResponse({ status: 404, description: 'Creator not found' })
+  blockFan(
+    @Param('id') id: string,
+    @Body() dto: BlockFanDto,
+    @Request() req: any,
+  ) {
+    if (req.user?.sub !== id) {
+      throw new ForbiddenException('You can only manage blocks for your own profile');
+    }
+    return this.creatorsService.blockFan(id, dto.fanAddress, dto.reason);
+  }
+
+  @Delete(':id/blocks/:fanAddress')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Unblock a fan' })
+  @ApiResponse({ status: 200, description: 'Fan unblocked' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Not your creator profile' })
+  unblockFan(
+    @Param('id') id: string,
+    @Param('fanAddress') fanAddress: string,
+    @Request() req: any,
+  ) {
+    if (req.user?.sub !== id) {
+      throw new ForbiddenException('You can only manage blocks for your own profile');
+    }
+    return this.creatorsService.unblockFan(id, fanAddress);
   }
 
   @Post(':id/webhooks')

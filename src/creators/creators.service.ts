@@ -278,6 +278,28 @@ export class CreatorsService {
     return Number(average.toFixed(1));
   }
 
+  async blockFan(creatorId: string, fanAddress: string, reason?: string) {
+    const creator = await this.prisma.creator.findUnique({ where: { userId: creatorId } });
+    if (!creator) throw new NotFoundException('Creator not found');
+    return this.prisma.block.upsert({
+      where: { creatorId_fanAddress: { creatorId: creator.id, fanAddress } },
+      update: { reason },
+      create: { creatorId: creator.id, fanAddress, reason },
+    });
+  }
+
+  async unblockFan(creatorId: string, fanAddress: string) {
+    const creator = await this.prisma.creator.findUnique({ where: { userId: creatorId } });
+    if (!creator) throw new NotFoundException('Creator not found');
+    await this.prisma.block.deleteMany({ where: { creatorId: creator.id, fanAddress } });
+    return { message: 'Fan unblocked' };
+  }
+
+  async isBlocked(creatorId: string, fanAddress: string): Promise<boolean> {
+    const count = await this.prisma.block.count({ where: { creatorId, fanAddress } });
+    return count > 0;
+  }
+
   private calculateRetentionRate(
     passes: Array<{ purchasedAt: Date; expiresAt: Date }>,
     startDate: Date,
