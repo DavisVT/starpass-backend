@@ -1,9 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import request from 'supertest';
+import * as request from 'supertest';
+import { CacheModule } from '@nestjs/cache-manager';
 import { CreatorsModule } from '../creators/creators.module';
 import { TiersModule } from '../tiers/tiers.module';
 import { PrismaService } from '../common/prisma.service';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { PassesService } from '../passes/passes.service';
 
 describe('Cache Integration', () => {
   let app: INestApplication;
@@ -34,7 +37,7 @@ describe('Cache Integration', () => {
         if (stellarAddress === 'addr1') return mockCreator;
         return null;
       }),
-      update: jest.fn(({ where: { id }, data }: any) => {
+      update: jest.fn(({ where: _, data }: any) => {
         const c = mockCreator;
         return Promise.resolve({ ...c, ...data });
       }),
@@ -52,12 +55,30 @@ describe('Cache Integration', () => {
     $disconnect: jest.fn(),
   };
 
+  const mockJwtGuard = {
+    canActivate: (context: any) => {
+      const req = context.switchToHttp().getRequest();
+      req.user = { sub: 'u1', address: 'addr1' };
+      return true;
+    },
+  };
+
+  const mockPassesService = {};
+
   beforeAll(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
-      imports: [CreatorsModule, TiersModule],
+      imports: [
+        CreatorsModule,
+        TiersModule,
+        CacheModule.register({ isGlobal: true }),
+      ],
     })
       .overrideProvider(PrismaService)
       .useValue(mockPrisma)
+      .overrideProvider(PassesService)
+      .useValue(mockPassesService)
+      .overrideGuard(JwtAuthGuard)
+      .useValue(mockJwtGuard)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -122,24 +143,20 @@ describe('Cache Integration', () => {
 
   describe('Cache invalidation', () => {
     it('should invalidate creator cache on update', async () => {
-      // First request - MISS
       await request(app.getHttpServer())
         .get('/creators/addr1')
         .expect(200);
 
-      // Second request - HIT
       const res2 = await request(app.getHttpServer())
         .get('/creators/addr1')
         .expect(200);
       expect(res2.headers['x-cache']).toBe('HIT');
 
-      // Update creator
       await request(app.getHttpServer())
         .patch('/creators/profile')
         .send({ displayName: 'Alice Updated' })
         .expect(200);
 
-      // Third request - MISS (cache invalidated)
       const res3 = await request(app.getHttpServer())
         .get('/creators/addr1')
         .expect(200);

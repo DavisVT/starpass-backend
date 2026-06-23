@@ -42,6 +42,33 @@ export class TiersService {
     });
   }
 
+  async bulkCreate(creatorAddress: string, dtos: CreateTierDto[], callerAddress: string) {
+    if (creatorAddress !== callerAddress) {
+      throw new ForbiddenException('You can only create tiers for your own profile');
+    }
+
+    const creator = await this.prisma.creator.findUnique({ where: { stellarAddress: creatorAddress } });
+    if (!creator) throw new NotFoundException('Creator not found');
+
+    return this.prisma.$transaction(
+      dtos.map((dto) =>
+        this.prisma.tier.create({
+          data: {
+            onChainId: dto.onChainId,
+            creatorId: creator.id,
+            name: dto.name,
+            description: dto.description,
+            priceUsdc: dto.priceUsdc,
+            durationDays: dto.durationDays,
+            maxSupply: dto.maxSupply ?? 0,
+            active: dto.active ?? true,
+            syncedAt: new Date(),
+          },
+        }),
+      ),
+    );
+  }
+
   /**
    * Get all active tiers for a creator
    *

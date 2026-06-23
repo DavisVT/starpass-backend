@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, Delete, BadRequestException, ForbiddenException, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request, Delete, BadRequestException, ForbiddenException, ValidationPipe, UseInterceptors } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { CacheTTL } from '@nestjs/cache-manager';
 import { CreatorsService } from './creators.service';
 import { CreateContentScheduleDto } from './dto/create-content-schedule.dto';
 import { CreateCreatorDto } from './dto/create-creator.dto';
@@ -12,6 +13,8 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { RegisterWebhookDto } from '../webhooks/dto/register-webhook.dto';
 import { CreatorAnalyticsDto } from './creator-analytics.dto';
 import { BlockFanDto } from './dto/block-fan.dto';
+import { XCacheInterceptor } from '../common/cache/cache.interceptor';
+import { ListEarningsDto } from './dto/list-earnings.dto';
 
 @ApiTags('creators')
 @Controller({ path: 'creators', version: '1' })
@@ -40,6 +43,8 @@ export class CreatorsController {
   }
 
   @Get(':address')
+  @UseInterceptors(XCacheInterceptor)
+  @CacheTTL(300)
   @ApiOperation({ summary: 'Get creator by Stellar address' })
   @ApiResponse({ status: 200, description: 'Return creator profile' })
   @ApiResponse({ status: 404, description: 'Creator not found' })
@@ -83,7 +88,6 @@ export class CreatorsController {
 
     return this.creatorsService.updateCategories(id, dto.categories);
   }
-
   @Get(':address/earnings')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -163,7 +167,7 @@ export class CreatorsController {
     if (req.user?.sub !== id) {
       throw new ForbiddenException('You can only manage blocks for your own profile');
     }
-    return this.creatorsService.blockFan(id, dto.fanAddress, dto.reason);
+    return this.creatorsService.blockFan(id, dto.fanAddress);
   }
 
   @Delete(':id/blocks/:fanAddress')
