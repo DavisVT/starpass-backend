@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { CreatorsController } from './creators.controller';
 import { CreatorsService } from './creators.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
@@ -27,6 +28,7 @@ describe('CreatorsController', () => {
       providers: [
         { provide: CreatorsService, useValue: mockCreatorsService },
         { provide: WebhooksService, useValue: mockWebhooksService },
+        { provide: CACHE_MANAGER, useValue: {} },
       ],
     })
       .overrideGuard(JwtAuthGuard)

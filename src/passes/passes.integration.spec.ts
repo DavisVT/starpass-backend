@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
 import * as request from 'supertest';
 import { PassesModule } from './passes.module';
 import { PassesService } from './passes.service';
@@ -97,7 +98,7 @@ describe('Passes GET /passes Integration', () => {
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [PassesModule],
+      imports: [PassesModule, CacheModule.register({ isGlobal: true })],
     })
       .overrideProvider(PassesService)
       .useValue(mockPassesService)

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
 import * as request from 'supertest';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -29,7 +30,7 @@ describe('Swagger Documentation', () => {
     process.env.NODE_ENV = 'development';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+      imports: [AppModule, CacheModule.register({ isGlobal: true })],
     })
       .overrideProvider(PrismaService)
       .useValue({
@@ -62,7 +63,7 @@ describe('Swagger Documentation', () => {
     process.env.NODE_ENV = 'production';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+      imports: [AppModule, CacheModule.register({ isGlobal: true })],
     })
       .overrideProvider(PrismaService)
       .useValue({
