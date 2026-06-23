@@ -36,6 +36,7 @@ describe('PassesService', () => {
     block: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
+      findFirst: jest.fn(),
     },
     earningsRecord: {
       create: jest.fn(),

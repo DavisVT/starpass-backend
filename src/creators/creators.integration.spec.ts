@@ -135,8 +135,6 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
     onModuleDestroy: jest.fn(),
   };
 
-  const prisma = mockPrismaService;
-
   const successJwtGuard = {
     canActivate: (context: any) => {
       const req = context.switchToHttp().getRequest();

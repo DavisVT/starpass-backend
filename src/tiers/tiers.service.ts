@@ -1,13 +1,10 @@
 import {
   Injectable,
   NotFoundException,
-  BadRequestException,
   ForbiddenException,
-  Logger,
   Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { EmailService } from '../notifications/email.service';
 import { CreateTierDto } from './dto/create-tier.dto';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';

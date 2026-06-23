@@ -3,9 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
 import { ConfigModule } from '@nestjs/config';
 import { AdminModule } from '../admin/admin.module';
-import { AdminService } from '../admin/admin.service';
-import { CreatorsModule } from '../creators/creators.module';
-import { CreatorsService } from '../creators/creators.service';
+
 import { PrismaService } from '../common/prisma.service';
 import { AdminApiKeyGuard } from '../admin/admin-api-key.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';

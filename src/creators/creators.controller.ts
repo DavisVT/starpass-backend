@@ -14,7 +14,6 @@ import { RegisterWebhookDto } from '../webhooks/dto/register-webhook.dto';
 import { CreatorAnalyticsDto } from './creator-analytics.dto';
 import { BlockFanDto } from './dto/block-fan.dto';
 import { XCacheInterceptor } from '../common/cache/cache.interceptor';
-import { ListEarningsDto } from './dto/list-earnings.dto';
 
 @ApiTags('creators')
 @Controller({ path: 'creators', version: '1' })

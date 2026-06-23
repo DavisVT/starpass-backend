@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { CreatorsService } from './creators.service';
 import { PrismaService } from '../common/prisma.service';
-import { UpdateCreatorDto } from './dto/update-creator.dto';
+
 
 describe('CreatorsService', () => {
   let service: CreatorsService;
@@ -21,8 +21,6 @@ describe('CreatorsService', () => {
       count: jest.fn(),
     },
   };
-  const prisma = mockPrismaService;
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [

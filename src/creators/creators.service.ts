@@ -24,7 +24,7 @@ export class CreatorsService {
   constructor(
     private prisma: PrismaService,
     @Optional() private notifications?: NotificationsService,
-    @Inject(CACHE_MANAGER) private cacheManager: any,
+    @Optional() @Inject(CACHE_MANAGER) private cacheManager?: any,
   ) {}
 
   async findFeatured() {

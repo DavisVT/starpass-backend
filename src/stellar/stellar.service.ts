@@ -6,8 +6,6 @@ import { RateLimiter } from '../common/rate-limiter';
 const MAX_RETRIES = 3;
 const INITIAL_DELAY_MS = 500;
 const CIRCUIT_BREAKER_THRESHOLD = 5;
-const MAX_RATE_LIMIT = 3;
-const RATE_LIMIT_WINDOW_MS = 1000;
 
 @Injectable()
 export class StellarService {
@@ -143,7 +141,7 @@ export class StellarService {
    */
   async getLedger(sequence: number): Promise<{ sequence: number; closedAt: number }> {
     return this.withRetry('getLedger', async () => {
-      const response = await this.server.getLedger(sequence);
+      const response = await (this.server as any).getLedger(sequence);
       return {
         sequence: response.sequence,
         closedAt: response.closedAt,

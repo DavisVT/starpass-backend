@@ -26,8 +26,6 @@ describe('IndexerService', () => {
       updateMany: jest.fn(),
     },
   };
-  const prisma = mockPrismaService;
-
   const mockStellarService = {
     getContractEvents: jest.fn().mockResolvedValue([]),
     getLatestLedger: jest.fn().mockResolvedValue(1000000),

@@ -37,7 +37,7 @@ describe('Cache Integration', () => {
         if (stellarAddress === 'addr1') return mockCreator;
         return null;
       }),
-      update: jest.fn(({ where: _, data }: any) => {
+      update: jest.fn(({ data }: any) => {
         const c = mockCreator;
         return Promise.resolve({ ...c, ...data });
       }),

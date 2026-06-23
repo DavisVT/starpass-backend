@@ -1,4 +1,5 @@
 {
+  "exclude": ["prisma", "test"],
   "compilerOptions": {
     "module": "commonjs",
     "declaration": true,

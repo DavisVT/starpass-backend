@@ -9,8 +9,6 @@ import { PrismaService } from '../common/prisma.service';
 
 describe('FansService', () => {
   let service: FansService;
-  let prisma: PrismaService;
-
   const mockFan = {
     id: 'fan-1',
     userId: 'user-1',

@@ -3,7 +3,6 @@ import { PrismaService } from '../common/prisma.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { ListPassesDto } from './dto/list-passes.dto';
 import { EmailService } from '../notifications/email.service';
-import { TiersService } from '../tiers/tiers.service';
 import { AdminConfigService } from '../admin/admin-config.service';
 import { MetricsService } from '../metrics/metrics.service';
 
