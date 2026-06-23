@@ -76,6 +76,14 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^rxjs/operators$": "<rootDir>/../node_modules/rxjs/dist/cjs/operators/index.js",
+      "^rxjs/ajax$": "<rootDir>/../node_modules/rxjs/dist/cjs/ajax/index.js",
+      "^rxjs/fetch$": "<rootDir>/../node_modules/rxjs/dist/cjs/fetch/index.js",
+      "^rxjs/testing$": "<rootDir>/../node_modules/rxjs/dist/cjs/testing/index.js",
+      "^rxjs/webSocket$": "<rootDir>/../node_modules/rxjs/dist/cjs/webSocket/index.js",
+      "^rxjs$": "<rootDir>/../node_modules/rxjs/dist/cjs/index.js"
+    }
   }
 }

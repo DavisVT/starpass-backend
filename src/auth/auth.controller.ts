@@ -1,6 +1,6 @@
 import { Controller, Post, Body, Get, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { IsString, IsNotEmpty } from 'class-validator';
@@ -19,7 +19,7 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Get('challenge')
-  @Throttle({ 'auth-nonce': { limit: 20, ttl: 60000 } })
+  @Throttle({ 'auth-nonce': {} })
   @ApiOperation({ summary: 'Get a challenge message to sign with your Stellar keypair' })
   @ApiResponse({ status: 200, description: 'Challenge message generated successfully' })
   @ApiResponse({ status: 429, description: 'Too many requests, rate limit exceeded' })
@@ -28,7 +28,7 @@ export class AuthController {
   }
 
   @Post('login')
-  @Throttle({ 'auth-login': { limit: 10, ttl: 60000 } })
+  @Throttle({ 'auth-login': {} })
   @ApiOperation({ summary: 'Login with a signed Stellar challenge' })
   @ApiResponse({ status: 201, description: 'Login successful — returns access token and refresh token' })
   @ApiResponse({ status: 401, description: 'Invalid signature or challenge' })
@@ -37,7 +37,10 @@ export class AuthController {
     return this.authService.login(dto.stellarAddress, dto.signature, dto.message);
   }
 
+  // refresh and logout are not auth-attack vectors; skip the strict auth throttlers
+  // and rely only on the default rate limiter.
   @Post('refresh')
+  @SkipThrottle({ 'auth-login': true, 'auth-nonce': true })
   @ApiOperation({ summary: 'Issue a new access token using a refresh token' })
   @ApiResponse({ status: 201, description: 'New access token issued' })
   @ApiResponse({ status: 401, description: 'Refresh token expired or invalid' })
@@ -46,6 +49,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @SkipThrottle({ 'auth-login': true, 'auth-nonce': true })
   @ApiOperation({ summary: 'Revoke a refresh token' })
   @ApiResponse({ status: 201, description: 'Logged out successfully' })
   logout(@Body() dto: RefreshDto) {
