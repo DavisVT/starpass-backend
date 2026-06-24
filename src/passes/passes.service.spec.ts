@@ -36,9 +36,10 @@ describe('PassesService', () => {
     block: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
+      findFirst: jest.fn(),
     },
     earningsRecord: {
-      create: jest.fn(),
+      create: jest.fn().mockResolvedValue({}),
     },
     $transaction: jest.fn(),
   };
@@ -193,10 +194,8 @@ describe('PassesService', () => {
       );
       expect(prisma.block.findFirst).toHaveBeenCalledWith({
         where: {
-          creatorId_blockedAddress: {
-            creatorId: mockCreator.id,
-            blockedAddress: mockData.fanAddress,
-          },
+          creatorId: mockCreator.id,
+          blockedAddress: mockData.fanAddress,
         },
       });
       expect(prisma.pass.upsert).not.toHaveBeenCalled();

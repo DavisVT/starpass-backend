@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { TiersController } from './tiers.controller';
 import { TiersService } from './tiers.service';
 
@@ -20,6 +21,10 @@ describe('TiersController', () => {
         {
           provide: TiersService,
           useValue: mockTiersService,
+        },
+        {
+          provide: CACHE_MANAGER,
+          useValue: {},
         },
       ],
     }).compile();

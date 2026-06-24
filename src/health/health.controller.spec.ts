@@ -10,8 +10,6 @@ describe('HealthController', () => {
   const mockPrismaService = {
     $queryRaw: jest.fn(),
   };
-  const prisma = mockPrismaService;
-
   const mockStellarService = {
     getLatestLedger: jest.fn(),
   };

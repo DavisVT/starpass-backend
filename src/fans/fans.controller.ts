@@ -1,7 +1,6 @@
 import { Controller, Get, Post, Delete, Param, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FansService } from './fans.service';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 @ApiTags('fans')
 @Controller({ path: 'fans', version: '1' })

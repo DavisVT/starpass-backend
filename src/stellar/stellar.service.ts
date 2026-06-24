@@ -11,8 +11,6 @@ import { RateLimiter } from "../common/rate-limiter";
 const MAX_RETRIES = 3;
 const INITIAL_DELAY_MS = 500;
 const CIRCUIT_BREAKER_THRESHOLD = 5;
-const MAX_RATE_LIMIT = 3;
-const RATE_LIMIT_WINDOW_MS = 1000;
 
 @Injectable()
 export class StellarService {

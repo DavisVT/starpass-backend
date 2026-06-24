@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
 import * as request from 'supertest';
 import { CreatorsModule } from './creators.module';
 import { CreatorsService } from './creators.service';
@@ -51,7 +52,7 @@ describe('Creators GET /creators/:id/earnings-history Integration', () => {
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [CreatorsModule],
+      imports: [CreatorsModule, CacheModule.register({ isGlobal: true })],
     })
       .overrideProvider(CreatorsService)
       .useValue(mockCreatorsService)
@@ -84,7 +85,7 @@ describe('Creators GET /creators/:id/earnings-history Integration', () => {
 
   it('should return 403 when the authenticated user does not own the creator', async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [CreatorsModule],
+      imports: [CreatorsModule, CacheModule.register({ isGlobal: true })],
     })
       .overrideProvider(CreatorsService)
       .useValue(mockCreatorsService)
@@ -135,8 +136,6 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
     onModuleDestroy: jest.fn(),
   };
 
-  const prisma = mockPrismaService;
-
   const successJwtGuard = {
     canActivate: (context: any) => {
       const req = context.switchToHttp().getRequest();
@@ -155,7 +154,7 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [CreatorsModule],
+      imports: [CreatorsModule, CacheModule.register({ isGlobal: true })],
     })
       .overrideProvider(CreatorsService)
       .useValue(mockCreatorsService)
@@ -190,7 +189,7 @@ describe('Creators GET /creators/:id/revenue Integration', () => {
 
   it('should return 403 when the authenticated user does not own the creator', async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [CreatorsModule],
+      imports: [CreatorsModule, CacheModule.register({ isGlobal: true })],
     })
       .overrideProvider(CreatorsService)
       .useValue(mockCreatorsService)

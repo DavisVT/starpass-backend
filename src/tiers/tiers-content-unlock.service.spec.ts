@@ -107,6 +107,7 @@ describe('TiersService – content unlock', () => {
       // Build a token manually with an already-past expiry
       const expiresAt = Math.floor(Date.now() / 1000) - 1; // 1 second in the past
       const payload = `${TIER_ID}:${FAN_ADDRESS}:${expiresAt}`;
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { createHmac } = require('crypto');
       const sig = createHmac('sha256', SECRET).update(payload).digest('hex');
       const token = `${Buffer.from(payload).toString('base64url')}.${sig}`;

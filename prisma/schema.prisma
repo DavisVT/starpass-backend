@@ -56,9 +56,11 @@ model Creator {
   passes         Pass[]
   blocks         Block[]
   categories     Category[]
+  contentSchedules ContentSchedule[]
   webhooks       WebhookConfig[]
   payouts        Payout[]
   earningsRecords EarningsRecord[]
+  creatorMembers  CreatorMember[]
   @@map("creators")
 }
 
@@ -115,6 +117,7 @@ model Fan {
   lastExportRequestedAt DateTime? @map("last_export_requested_at")
   user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   passes              Pass[]
+  notifications       Notification[]
   earningsRecords     EarningsRecord[]
   @@map("fans")
 }
@@ -138,6 +141,7 @@ model Tier {
   waitlist     WaitlistEntry[]
   earningsRecords EarningsRecord[]
   prices       TierPrice[]
+  contentSchedules ContentSchedule[]
   @@unique([creatorId, onChainId])
   @@map("tiers")
 }
@@ -223,6 +227,20 @@ model Block {
   creator   Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   @@unique([creatorId, blockedAddress])
   @@map("blocks")
+}
+
+model CreatorMember {
+  id        String   @id @default(uuid())
+  creatorId String   @map("creator_id")
+  address   String
+  role      String   @default("EDITOR")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  creator   Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, address])
+  @@map("creator_members")
 }
 
 model ContentSchedule {

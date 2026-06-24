@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MetricsModule } from './metrics.module';
 import { MetricsService } from './metrics.service';
 import { MetricsAuthMiddleware } from './metrics.middleware';
-import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 
 describe('MetricsModule', () => {
   let module: TestingModule;

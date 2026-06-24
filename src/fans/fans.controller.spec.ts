@@ -6,7 +6,6 @@ import { FansService } from './fans.service';
 
 describe('FansController (Integration)', () => {
   let app: INestApplication;
-  let fansService: FansService;
 
   const mockFan = {
     id: 'fan-1',
@@ -41,7 +40,6 @@ describe('FansController (Integration)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    fansService = moduleFixture.get<FansService>(FansService);
     await app.init();
 
     jest.clearAllMocks();

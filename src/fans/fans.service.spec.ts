@@ -9,8 +9,6 @@ import { PrismaService } from '../common/prisma.service';
 
 describe('FansService', () => {
   let service: FansService;
-  let prisma: PrismaService;
-
   const mockFan = {
     id: 'fan-1',
     userId: 'user-1',
@@ -66,7 +64,6 @@ describe('FansService', () => {
     }).compile();
 
     service = module.get<FansService>(FansService);
-    prisma = module.get<PrismaService>(PrismaService);
 
     jest.clearAllMocks();
   });

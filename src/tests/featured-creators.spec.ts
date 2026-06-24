@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
+import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule } from '@nestjs/config';
 import { AdminModule } from '../admin/admin.module';
-import { AdminService } from '../admin/admin.service';
 import { CreatorsModule } from '../creators/creators.module';
-import { CreatorsService } from '../creators/creators.service';
+
 import { PrismaService } from '../common/prisma.service';
 import { AdminApiKeyGuard } from '../admin/admin-api-key.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -48,7 +48,7 @@ describe('Featured Creators', () => {
 
   beforeAll(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
-      imports: [ConfigModule.forRoot({ ignoreEnvFile: true, isGlobal: true }), AdminModule, CreatorsModule],
+      imports: [ConfigModule.forRoot({ ignoreEnvFile: true, isGlobal: true }), CacheModule.register({ isGlobal: true }), AdminModule, CreatorsModule],
     })
       .overrideProvider(PrismaService)
       .useValue(mockPrisma)
