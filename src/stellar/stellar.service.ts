@@ -1,7 +1,12 @@
-import { Injectable, Logger, ServiceUnavailableException, Optional } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import * as StellarSdk from '@stellar/stellar-sdk';
-import { RateLimiter } from '../common/rate-limiter';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  Optional,
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import * as StellarSdk from "@stellar/stellar-sdk";
+import { RateLimiter } from "../common/rate-limiter";
 
 const MAX_RETRIES = 3;
 const INITIAL_DELAY_MS = 500;
@@ -20,14 +25,22 @@ export class StellarService {
   private circuitOpen = false;
 
   constructor(@Optional() private config?: ConfigService) {
-    const rpcUrl = this.config?.get('STELLAR_RPC_URL') || process.env.STELLAR_RPC_URL || 'https://soroban-testnet.stellar.org';
+    const rpcUrl =
+      this.config?.get("STELLAR_RPC_URL") ||
+      process.env.STELLAR_RPC_URL ||
+      "https://soroban-testnet.stellar.org";
     this.server = new StellarSdk.rpc.Server(rpcUrl);
-    this.contractId = this.config?.get('STARPASS_CONTRACT_ID') || process.env.STARPASS_CONTRACT_ID || '';
+    this.contractId =
+      this.config?.get("STARPASS_CONTRACT_ID") ||
+      process.env.STARPASS_CONTRACT_ID ||
+      "";
   }
 
   private async withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
     if (this.circuitOpen) {
-      throw new ServiceUnavailableException('Stellar RPC circuit breaker is open');
+      throw new ServiceUnavailableException(
+        "Stellar RPC circuit breaker is open",
+      );
     }
 
     let lastError: unknown;
@@ -43,11 +56,15 @@ export class StellarService {
         this.consecutiveFailures++;
         if (this.consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
           this.circuitOpen = true;
-          this.logger.error(`[${label}] Circuit breaker opened after ${this.consecutiveFailures} consecutive failures`);
+          this.logger.error(
+            `[${label}] Circuit breaker opened after ${this.consecutiveFailures} consecutive failures`,
+          );
         }
         if (attempt < MAX_RETRIES) {
           const delay = INITIAL_DELAY_MS * 2 ** (attempt - 1);
-          this.logger.warn(`[${label}] attempt ${attempt}/${MAX_RETRIES} failed — retrying in ${delay}ms`);
+          this.logger.warn(
+            `[${label}] attempt ${attempt}/${MAX_RETRIES} failed — retrying in ${delay}ms`,
+          );
           await new Promise((r) => setTimeout(r, delay));
         }
       }
@@ -61,31 +78,36 @@ export class StellarService {
    * Check if a fan has a valid pass on-chain
    * This is the source of truth — DB is a cache
    */
-  async hasValidPassOnChain(fanAddress: string, tierId: number): Promise<boolean> {
+  async hasValidPassOnChain(
+    fanAddress: string,
+    tierId: number,
+  ): Promise<boolean> {
     try {
-      return await this.withRetry('hasValidPassOnChain', async () => {
+      return await this.withRetry("hasValidPassOnChain", async () => {
         const contract = new StellarSdk.Contract(this.contractId);
         const result = await this.server.simulateTransaction(
           new StellarSdk.TransactionBuilder(
             await this.server.getAccount(fanAddress),
-            { fee: '100', networkPassphrase: StellarSdk.Networks.TESTNET },
+            { fee: "100", networkPassphrase: StellarSdk.Networks.TESTNET },
           )
             .addOperation(
               contract.call(
-                'has_valid_pass',
-                StellarSdk.nativeToScVal(fanAddress, { type: 'address' }),
-                StellarSdk.nativeToScVal(tierId, { type: 'u32' }),
+                "has_valid_pass",
+                StellarSdk.nativeToScVal(fanAddress, { type: "address" }),
+                StellarSdk.nativeToScVal(tierId, { type: "u32" }),
               ),
             )
             .setTimeout(30)
             .build(),
         );
 
-        if ('error' in result) return false;
+        if ("error" in result) return false;
         return StellarSdk.scValToNative(result.result?.retval) as boolean;
       });
     } catch (error) {
-      this.logger.error(`Error checking pass on-chain: ${(error as Error).message}`);
+      this.logger.error(
+        `Error checking pass on-chain: ${(error as Error).message}`,
+      );
       return false;
     }
   }
@@ -95,10 +117,10 @@ export class StellarService {
    */
   async getContractEvents(startLedger: number) {
     try {
-      return await this.withRetry('getContractEvents', async () => {
+      return await this.withRetry("getContractEvents", async () => {
         const response = await this.server.getEvents({
           startLedger,
-          filters: [{ type: 'contract', contractIds: [this.contractId] }],
+          filters: [{ type: "contract", contractIds: [this.contractId] }],
           limit: 100,
         });
         return response.events || [];
@@ -114,16 +136,20 @@ export class StellarService {
    */
   async getContractEventsInRange(startLedger: number, endLedger: number) {
     try {
-      return await this.withRetry('getContractEventsInRange', async () => {
+      return await this.withRetry("getContractEventsInRange", async () => {
         const response = await this.server.getEvents({
           startLedger,
-          filters: [{ type: 'contract', contractIds: [this.contractId] }],
+          filters: [{ type: "contract", contractIds: [this.contractId] }],
           limit: 100,
         });
-        return (response.events || []).filter(event => event.ledger <= endLedger);
+        return (response.events || []).filter(
+          (event) => event.ledger <= endLedger,
+        );
       });
     } catch (error) {
-      this.logger.error(`Error fetching events in range: ${(error as Error).message}`);
+      this.logger.error(
+        `Error fetching events in range: ${(error as Error).message}`,
+      );
       return [];
     }
   }
@@ -132,7 +158,7 @@ export class StellarService {
    * Get the latest ledger number
    */
   async getLatestLedger(): Promise<number> {
-    return this.withRetry('getLatestLedger', async () => {
+    return this.withRetry("getLatestLedger", async () => {
       const response = await this.server.getLatestLedger();
       return response.sequence;
     });
@@ -141,12 +167,26 @@ export class StellarService {
   /**
    * Get ledger by sequence number to check its timestamp
    */
-  async getLedger(sequence: number): Promise<{ sequence: number; closedAt: number }> {
-    return this.withRetry('getLedger', async () => {
-      const response = await this.server.getLedger(sequence);
+  async getLedger(
+    sequence: number,
+  ): Promise<{ sequence: number; closedAt: number }> {
+    return this.withRetry("getLedger", async () => {
+      const isMainnet =
+        this.config?.get("STELLAR_RPC_URL")?.includes("public") || false;
+      const horizonUrl = isMainnet
+        ? "https://horizon.stellar.org"
+        : "https://horizon-testnet.stellar.org";
+
+      const horizonServer = new StellarSdk.Horizon.Server(horizonUrl);
+
+      const response = (await horizonServer
+        .ledgers()
+        .ledger(sequence)
+        .call()) as any;
+
       return {
         sequence: response.sequence,
-        closedAt: response.closedAt,
+        closedAt: Math.floor(new Date(response.closed_at).getTime() / 1000),
       };
     });
   }
@@ -175,14 +215,17 @@ export class StellarService {
     try {
       const contract = new StellarSdk.Contract(this.contractId);
       const networkPassphrase =
-        this.config.get('STELLAR_NETWORK') === 'mainnet'
+        this.config.get("STELLAR_NETWORK") === "mainnet"
           ? StellarSdk.Networks.PUBLIC
           : StellarSdk.Networks.TESTNET;
 
       // Simulate the set_fee call to verify it would succeed on-chain
-      const adminAddress = this.config.get<string>('ADMIN_STELLAR_ADDRESS') || '';
+      const adminAddress =
+        this.config.get<string>("ADMIN_STELLAR_ADDRESS") || "";
       if (!adminAddress) {
-        this.logger.warn('ADMIN_STELLAR_ADDRESS not configured — skipping on-chain fee emit');
+        this.logger.warn(
+          "ADMIN_STELLAR_ADDRESS not configured — skipping on-chain fee emit",
+        );
         return;
       }
 
@@ -190,13 +233,13 @@ export class StellarService {
       await this.rateLimiter.acquire();
       await this.server.simulateTransaction(
         new StellarSdk.TransactionBuilder(account, {
-          fee: '100',
+          fee: "100",
           networkPassphrase,
         })
           .addOperation(
             contract.call(
-              'set_fee',
-              StellarSdk.nativeToScVal(feeBps, { type: 'u32' }),
+              "set_fee",
+              StellarSdk.nativeToScVal(feeBps, { type: "u32" }),
             ),
           )
           .setTimeout(30)

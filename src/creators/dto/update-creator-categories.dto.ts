@@ -1,11 +1,21 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { ArrayUnique, IsArray, IsString, MinLength } from 'class-validator';
+import { ApiProperty } from "@nestjs/swagger";
+import {
+  ArrayUnique,
+  IsArray,
+  IsString,
+  MinLength,
+  IsNotEmpty,
+} from "class-validator";
 
 export class UpdateCreatorCategoriesDto {
-  @ApiProperty({ description: 'Category slugs to assign to the creator', example: ['music', 'art'] })
+  @ApiProperty({
+    description: "Category slugs to assign to the creator",
+    example: ["music", "art"],
+  })
   @IsArray()
   @ArrayUnique()
   @IsString({ each: true })
+  @IsNotEmpty({ each: true })
   @MinLength(1, { each: true })
   categories: string[];
 }

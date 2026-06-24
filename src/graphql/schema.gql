@@ -11,6 +11,8 @@ type Creator {
   avatarUrl: String
   totalEarned: Float!
   registeredAt: DateTime!
+  verified: Boolean!
+  verifiedAt: DateTime
   createdAt: DateTime!
   updatedAt: DateTime!
 }

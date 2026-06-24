@@ -1,9 +1,9 @@
-import { IsString, IsNotEmpty, IsIn } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsNotEmpty, IsIn } from "class-validator";
+import { ApiProperty } from "@nestjs/swagger";
 
 export class CreateReportDto {
-  @ApiProperty({ enum: ['PASS', 'CREATOR', 'TIER'] })
-  @IsIn(['PASS', 'CREATOR', 'TIER'])
+  @ApiProperty({ enum: ["PASS", "CREATOR", "TIER"] })
+  @IsIn(["PASS", "CREATOR", "TIER"])
   targetType: string;
 
   @ApiProperty()
