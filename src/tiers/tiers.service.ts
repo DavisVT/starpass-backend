@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../common/prisma.service';
 import { EmailService } from '../notifications/email.service';
 import { CreateTierDto } from './dto/create-tier.dto';
+import { TierAnalyticsDto } from './tier-analytics.dto';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
 
@@ -164,6 +165,102 @@ export class TiersService {
     if (!creator) throw new NotFoundException('Creator not found');
 
     return this.findAll(page, limit, creator.id);
+  }
+
+  private getPeriodDays(period: string) {
+    switch (period) {
+      case '7d':
+        return 7;
+      case '30d':
+        return 30;
+      case '90d':
+        return 90;
+      default:
+        throw new BadRequestException('Invalid period. Accepted values are 7d, 30d, 90d.');
+    }
+  }
+
+  private normalizeDateToDay(date: Date) {
+    const copy = new Date(date);
+    copy.setUTCHours(0, 0, 0, 0);
+    return copy;
+  }
+
+  private addDays(date: Date, days: number) {
+    const copy = new Date(date);
+    copy.setUTCDate(copy.getUTCDate() + days);
+    return copy;
+  }
+
+  private buildPurchasesByDay(
+    purchases: Array<{ purchasedAt: Date }>,
+    startDate: Date,
+    periodDays: number,
+  ) {
+    const purchasesByDay: Array<{ date: string; count: number }> = [];
+
+    for (let dayIndex = 0; dayIndex < periodDays; dayIndex += 1) {
+      const dayStart = this.addDays(startDate, dayIndex);
+      const dayEnd = this.addDays(dayStart, 1);
+      const date = dayStart.toISOString().slice(0, 10);
+
+      const count = purchases.filter(
+        (purchase) => purchase.purchasedAt >= dayStart && purchase.purchasedAt < dayEnd,
+      ).length;
+
+      purchasesByDay.push({ date, count });
+    }
+
+    return purchasesByDay;
+  }
+
+  async getAnalytics(tierId: string, ownerUserId: string, period = '30d'): Promise<TierAnalyticsDto> {
+    const tier = await this.prisma.tier.findUnique({
+      where: { id: tierId },
+      include: { creator: true },
+    });
+
+    if (!tier) {
+      throw new NotFoundException('Tier not found');
+    }
+
+    if (tier.creator.userId !== ownerUserId) {
+      throw new ForbiddenException('You are not authorized to access this tier analytics');
+    }
+
+    const periodDays = this.getPeriodDays(period);
+    const now = new Date();
+    const endDate = this.normalizeDateToDay(now);
+    const startDate = this.addDays(endDate, -periodDays + 1);
+    const price = Number(tier.priceUsdc);
+
+    const [purchasesInPeriod, activePasses] = await Promise.all([
+      this.prisma.pass.findMany({
+        where: {
+          tierId,
+          purchasedAt: { gte: startDate, lte: now },
+        },
+        select: { purchasedAt: true },
+      }),
+      this.prisma.pass.count({
+        where: {
+          tierId,
+          active: true,
+          expiresAt: { gt: now },
+        },
+      }),
+    ]);
+
+    const totalPurchases = purchasesInPeriod.length;
+    const totalRevenue = Number((totalPurchases * price).toFixed(2));
+    const purchasesByDay = this.buildPurchasesByDay(purchasesInPeriod, startDate, periodDays);
+
+    return {
+      totalPurchases,
+      totalRevenue,
+      activePasses,
+      purchasesByDay,
+    };
   }
 
   // ── Content unlock ────────────────────────────────────────────────────────

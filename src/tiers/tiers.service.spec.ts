@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { TiersService } from './tiers.service';
 import { PrismaService } from '../common/prisma.service';
 
@@ -15,6 +16,10 @@ describe('TiersService', () => {
       findMany: jest.fn(),
       findUnique: jest.fn(),
       upsert: jest.fn(),
+    },
+    pass: {
+      findMany: jest.fn(),
+      count: jest.fn(),
     },
   };
   
@@ -66,6 +71,54 @@ describe('TiersService', () => {
       expect(prisma.tier.count).toHaveBeenCalledWith({
         where: { creatorId: 'creator-123' },
       });
+    });
+  });
+
+  describe('getAnalytics', () => {
+    const tierId = 'tier-1';
+    const mockTier = {
+      id: tierId,
+      priceUsdc: '15.00',
+      creator: { userId: 'user-123' },
+    };
+
+    beforeEach(() => {
+      mockPrismaService.tier.findUnique.mockResolvedValue(mockTier);
+      mockPrismaService.pass.findMany.mockResolvedValue([
+        { purchasedAt: new Date('2026-06-10T00:00:00Z') },
+        { purchasedAt: new Date('2026-06-11T00:00:00Z') },
+      ]);
+      mockPrismaService.pass.count.mockResolvedValue(5);
+    });
+
+    it('should compute analytics for the tier owner', async () => {
+      jest.useFakeTimers({ now: new Date('2026-06-15T12:00:00Z') });
+
+      const result = await service.getAnalytics(tierId, 'user-123', '30d');
+
+      expect(result).toEqual({
+        totalPurchases: 2,
+        totalRevenue: 30,
+        activePasses: 5,
+        purchasesByDay: expect.any(Array),
+      });
+      expect(result.purchasesByDay).toHaveLength(30);
+
+      jest.useRealTimers();
+    });
+
+    it('should throw NotFoundException when tier does not exist', async () => {
+      mockPrismaService.tier.findUnique.mockResolvedValue(null);
+
+      await expect(service.getAnalytics('missing', 'user-123')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('should throw ForbiddenException when user is not the tier creator', async () => {
+      await expect(service.getAnalytics(tierId, 'user-456')).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('should throw BadRequestException for invalid period', async () => {
+      await expect(service.getAnalytics(tierId, 'user-123', '1y')).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 });
