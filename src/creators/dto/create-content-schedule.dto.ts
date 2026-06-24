@@ -1,11 +1,11 @@
-import { IsString, IsNotEmpty, IsISO8601 } from 'class-validator';
+import { IsString, IsNotEmpty, IsISO8601, IsUrl } from "class-validator";
 
 export class CreateContentScheduleDto {
   @IsString()
   @IsNotEmpty()
   tierId: string;
 
-  @IsString()
+  @IsUrl()
   @IsNotEmpty()
   contentUrl: string;
 

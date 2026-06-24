@@ -1,9 +1,9 @@
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { AppModule } from './app.module';
-import { validateConfig } from './common/config.validation';
-import { createCorsOptions } from './common/cors.config';
+import { NestFactory } from "@nestjs/core";
+import { ValidationPipe, VersioningType } from "@nestjs/common";
+import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
+import { AppModule } from "./app.module";
+import { validateConfig } from "./common/config.validation";
+import { createCorsOptions } from "./common/cors.config";
 
 // Fail fast if required environment variables are missing
 validateConfig();
@@ -14,7 +14,7 @@ async function bootstrap() {
   // URI versioning — all routes prefixed with /v{n}/
   app.enableVersioning({ type: VersioningType.URI });
 
-  // Global validation pipe
+  // Global validation pipe with strict payload sanitization
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -23,27 +23,30 @@ async function bootstrap() {
     }),
   );
 
-  // CORS
+  // CORS Configuration
   app.enableCors(createCorsOptions());
 
-  // Swagger docs
-  if (process.env.NODE_ENV !== 'production') {
+  // Swagger Documentation configuration
+  if (process.env.NODE_ENV !== "production") {
     const config = new DocumentBuilder()
-      .setTitle('StarPass API')
-      .setDescription('Backend API for the StarPass creator membership platform on Stellar')
-      .setVersion('1.0')
-      .addServer('/v1', 'Version 1')
+      .setTitle("StarPass API")
+      .setDescription(
+        "Backend API for the StarPass creator membership platform on Stellar",
+      )
+      .setVersion("1.0")
+      .addServer("/v1", "Version 1")
       .addBearerAuth()
       .build();
     const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('api/docs', app, document);
+    SwaggerModule.setup("api/docs", app, document);
   }
 
   const port = process.env.PORT || 4000;
   await app.listen(port);
+
   console.log(`StarPass API running on port ${port}`);
   console.log(`Swagger docs: http://localhost:${port}/api/docs`);
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.NODE_ENV !== "production") {
     console.log(`GraphQL playground: http://localhost:${port}/graphql`);
   }
 }
