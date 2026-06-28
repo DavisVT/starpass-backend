@@ -130,6 +130,7 @@ model Tier {
   description  String?
   priceUsdc    Decimal       @map("price_usdc")
   durationDays Int           @map("duration_days")
+  trialDays    Int           @default(0) @map("trial_days")
   maxSupply    Int           @default(0) @map("max_supply")
   minted       Int           @default(0)
   active       Boolean       @default(true)
@@ -181,6 +182,7 @@ model Pass {
   expiresAt   DateTime @map("expires_at")
   txHash      String?  @map("tx_hash")
   active      Boolean  @default(true)
+  trialUsed   Boolean  @default(false) @map("trial_used")
   syncedAt    DateTime @map("synced_at")
   createdAt   DateTime @default(now()) @map("created_at")
   tier        Tier     @relation(fields: [tierId], references: [id])

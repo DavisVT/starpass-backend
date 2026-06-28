@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { PassesController } from './passes.controller';
 import { PassesService } from './passes.service';
+import { PassesScheduler } from './passes.scheduler';
 import { AuthModule } from '../auth/auth.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -11,7 +12,7 @@ import { MetricsModule } from '../metrics/metrics.module';
 @Module({
   imports: [AuthModule, WebhooksModule, NotificationsModule, forwardRef(() => TiersModule), AdminModule, MetricsModule],
   controllers: [PassesController],
-  providers: [PassesService],
+  providers: [PassesService, PassesScheduler],
   exports: [PassesService],
 })
 export class PassesModule {}

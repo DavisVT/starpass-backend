@@ -41,6 +41,13 @@ export class CreateTierDto {
   @Type(() => Number)
   durationDays: number;
 
+  @ApiPropertyOptional({ description: "Free trial duration in days (0 = no trial)" })
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Type(() => Number)
+  trialDays?: number;
+
   @ApiPropertyOptional({ description: "Max supply (0 = unlimited)" })
   @IsNumber()
   @IsOptional()

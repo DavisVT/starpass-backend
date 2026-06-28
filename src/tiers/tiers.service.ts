@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
   Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
@@ -40,6 +41,16 @@ export class TiersService {
     });
   }
 
+  /**
+   * Create multiple tiers for a creator in a single transaction.
+   *
+   * @param creatorAddress The creator's Stellar public key.
+   * @param dtos Tier creation payloads.
+   * @param callerAddress The authenticated caller's Stellar address.
+   * @returns The created tier records.
+   * @throws {ForbiddenException} If the caller is not the creator owner.
+   * @throws {NotFoundException} If the creator is not found.
+   */
   async bulkCreate(creatorAddress: string, dtos: CreateTierDto[], callerAddress: string) {
     if (creatorAddress !== callerAddress) {
       throw new ForbiddenException('You can only create tiers for your own profile');
@@ -58,6 +69,7 @@ export class TiersService {
             description: dto.description,
             priceUsdc: dto.priceUsdc,
             durationDays: dto.durationDays,
+            trialDays: dto.trialDays ?? 0,
             maxSupply: dto.maxSupply ?? 0,
             active: dto.active ?? true,
             syncedAt: new Date(),
@@ -171,6 +183,14 @@ export class TiersService {
     });
   }
 
+  /**
+   * List tiers with optional creator filter and pagination.
+   *
+   * @param page Page number (1-based).
+   * @param limit Maximum records per page.
+   * @param creatorId Optional internal creator UUID filter.
+   * @returns Paginated tier list with total count.
+   */
   async findAll(page: number, limit: number, creatorId?: string) {
     const skip = (page - 1) * limit;
     const where: any = {};
@@ -184,6 +204,15 @@ export class TiersService {
     return { data, total, page, limit };
   }
 
+  /**
+   * List tiers for a creator by Stellar address with pagination.
+   *
+   * @param creatorAddress The creator's Stellar public key.
+   * @param page Page number (1-based).
+   * @param limit Maximum records per page.
+   * @returns Paginated tier list with total count.
+   * @throws {NotFoundException} If the creator is not found.
+   */
   async findByCreatorAddressPaginated(creatorAddress: string, page: number, limit: number) {
     const creator = await this.prisma.creator.findUnique({ where: { stellarAddress: creatorAddress } });
     if (!creator) throw new NotFoundException('Creator not found');
@@ -238,6 +267,17 @@ export class TiersService {
     return purchasesByDay;
   }
 
+  /**
+   * Get purchase analytics for a tier over a time period.
+   *
+   * @param tierId Internal tier UUID.
+   * @param ownerUserId The authenticated creator's user ID.
+   * @param period Analytics window (`7d`, `30d`, or `90d`).
+   * @returns Purchase counts, revenue, active passes, and daily breakdown.
+   * @throws {NotFoundException} If the tier is not found.
+   * @throws {ForbiddenException} If the caller is not the tier owner.
+   * @throws {BadRequestException} If the period is invalid.
+   */
   async getAnalytics(tierId: string, ownerUserId: string, period = '30d'): Promise<TierAnalyticsDto> {
     const tier = await this.prisma.tier.findUnique({
       where: { id: tierId },
@@ -296,7 +336,12 @@ export class TiersService {
 
   /**
    * Issue a signed temporary content URL for a verified pass holder.
-   * The caller must have an active, non-expired pass for the tier.
+   *
+   * @param tierId Internal tier UUID.
+   * @param fanAddress The fan's Stellar public key.
+   * @returns Signed unlock token and expiry timestamp.
+   * @throws {NotFoundException} If the tier is not found.
+   * @throws {ForbiddenException} If the fan has no valid pass for the tier.
    */
   async unlockContent(tierId: string, fanAddress: string): Promise<{ token: string; expiresAt: string }> {
     const tier = await this.prisma.tier.findUnique({ where: { id: tierId } });
@@ -322,6 +367,10 @@ export class TiersService {
 
   /**
    * Verify a previously issued content unlock token.
+   *
+   * @param tierId Internal tier UUID the token was issued for.
+   * @param token The signed unlock token.
+   * @returns Validation result and fan address when valid.
    */
   verifyContentToken(tierId: string, token: string): { valid: boolean; fanAddress?: string } {
     try {

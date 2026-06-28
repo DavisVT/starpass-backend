@@ -13,6 +13,15 @@ export class AuthService {
     private jwt: JwtService,
   ) {}
 
+  /**
+   * Authenticate a user via Stellar signature and issue JWT tokens.
+   *
+   * @param stellarAddress The Stellar public key of the user.
+   * @param signature Base64-encoded signature of the challenge message.
+   * @param message The signed challenge message.
+   * @returns Access token, refresh token, and user record.
+   * @throws {UnauthorizedException} If the signature is invalid.
+   */
   async login(stellarAddress: string, signature: string, message: string) {
     const isValid = this.verifySignature(stellarAddress, message, signature);
     if (!isValid) {
@@ -31,6 +40,13 @@ export class AuthService {
     return { token: accessToken, refreshToken, user };
   }
 
+  /**
+   * Exchange a valid refresh token for a new access token.
+   *
+   * @param refreshToken The refresh token from a prior login.
+   * @returns A new access token.
+   * @throws {UnauthorizedException} If the refresh token is expired, invalid, or the user is not found.
+   */
   async refresh(refreshToken: string) {
     const session = await this.prisma.session.findUnique({ where: { token: refreshToken } });
 
@@ -46,16 +62,35 @@ export class AuthService {
     return { token: accessToken };
   }
 
+  /**
+   * Invalidate a refresh token session.
+   *
+   * @param refreshToken The refresh token to revoke.
+   * @returns A confirmation message.
+   */
   async logout(refreshToken: string) {
     await this.prisma.session.deleteMany({ where: { token: refreshToken } });
     return { message: 'Logged out successfully' };
   }
 
+  /**
+   * Generate a Stellar wallet authentication challenge message.
+   *
+   * @param stellarAddress The Stellar public key requesting authentication.
+   * @returns A challenge string to be signed by the wallet.
+   */
   getChallenge(stellarAddress: string): string {
     const timestamp = Date.now();
     return `StarPass authentication challenge for ${stellarAddress} at ${timestamp}`;
   }
 
+  /**
+   * Verify a JWT access token and return the associated user.
+   *
+   * @param token The JWT access token.
+   * @returns The user record if the token is valid.
+   * @throws {UnauthorizedException} If the token is invalid or expired.
+   */
   async validateToken(token: string) {
     try {
       const payload = this.jwt.verify(token);

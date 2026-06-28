@@ -182,8 +182,161 @@ export class PassesService {
   }
 
   /**
+   * Mint a pass for a fan on a tier, applying a free trial when eligible.
+   *
+   * @param tierOnChainId The on-chain ID of the tier to mint a pass for.
+   * @param fanAddress The Stellar public key of the fan.
+   * @param options Optional mint options (transaction client, on-chain ID, purchase time, tx hash).
+   * @returns The created pass record.
+   * @throws {BadRequestException} If the tier is not found or inactive.
+   * @throws {ForbiddenException} If the fan is blocked or has already used a trial on this tier.
+   */
+  async mintPass(
+    tierOnChainId: number,
+    fanAddress: string,
+    options?: {
+      tx?: any;
+      onChainId?: bigint;
+      purchasedAt?: Date;
+      txHash?: string | null;
+      chainExpiresAt?: Date;
+    },
+  ) {
+    const db = options?.tx ?? this.prisma;
+
+    const tier = await db.tier.findFirst({
+      where: { onChainId: tierOnChainId, active: true },
+      include: { creator: true },
+    });
+
+    if (!tier) {
+      throw new BadRequestException('Tier not found or inactive');
+    }
+
+    const block = await db.block.findFirst({
+      where: {
+        creatorId: tier.creatorId,
+        blockedAddress: fanAddress,
+      },
+    });
+
+    if (block) {
+      throw new ForbiddenException('Fan is blocked by this creator');
+    }
+
+    const fan = await db.fan.upsert({
+      where: { stellarAddress: fanAddress },
+      update: {},
+      create: {
+        stellarAddress: fanAddress,
+        user: {
+          connectOrCreate: {
+            where: { stellarAddress: fanAddress },
+            create: { stellarAddress: fanAddress },
+          },
+        },
+      },
+    });
+
+    const priorPasses = await db.pass.findMany({
+      where: { fanId: fan.id, tierId: tier.id },
+    });
+
+    if (priorPasses.some((p) => p.trialUsed)) {
+      throw new ForbiddenException('Trial already used for this tier');
+    }
+
+    const isFirstTime = priorPasses.length === 0;
+    const isTrial = isFirstTime && tier.trialDays > 0;
+    const purchasedAt = options?.purchasedAt ?? new Date();
+    const expiresAt = isTrial
+      ? new Date(purchasedAt.getTime() + tier.trialDays * 24 * 60 * 60 * 1000)
+      : options?.chainExpiresAt ??
+        new Date(purchasedAt.getTime() + tier.durationDays * 24 * 60 * 60 * 1000);
+
+    const onChainId =
+      options?.onChainId ?? BigInt(Date.now()) + BigInt(Math.floor(Math.random() * 1000000));
+
+    const pass = await db.pass.create({
+      data: {
+        onChainId,
+        tierId: tier.id,
+        creatorId: tier.creatorId,
+        fanId: fan.id,
+        purchasedAt,
+        expiresAt,
+        txHash: options?.txHash,
+        trialUsed: isTrial,
+        syncedAt: new Date(),
+      },
+      include: {
+        tier: true,
+        creator: true,
+      },
+    });
+
+    if (!isTrial) {
+      const amount = Number(tier.priceUsdc);
+      const fee = 0;
+      const netAmount = amount - fee;
+
+      if (this.metricsService) {
+        this.metricsService.incActivePasses(tier.creator.stellarAddress);
+        this.metricsService.incRevenue(tier.creator.stellarAddress, amount);
+      }
+
+      await db.earningsRecord.create({
+        data: {
+          creatorId: tier.creatorId,
+          fanId: fan.id,
+          tierId: tier.id,
+          amount,
+          fee,
+          netAmount,
+        },
+      });
+
+      this.webhooksService.deliverPassPurchaseWebhook(tier.creatorId, pass).catch((err) => {
+        this.logger.error(`Error triggering webhook: ${err.message}`);
+      });
+
+      if (tier.creator.email) {
+        this.emailService
+          .sendPassPurchaseEmail(
+            tier.creator.email,
+            fanAddress,
+            tier.name,
+            tier.priceUsdc.toString(),
+          )
+          .catch((err) => {
+            this.logger.error(`Error triggering email: ${err.message}`);
+          });
+      }
+    }
+
+    return pass;
+  }
+
+  /**
+   * Batch-deactivate passes that have expired.
+   *
+   * @returns The number of passes deactivated.
+   */
+  async deactivateExpiredPasses(): Promise<number> {
+    const now = new Date();
+    const result = await this.prisma.pass.updateMany({
+      where: {
+        active: true,
+        expiresAt: { lt: now },
+      },
+      data: { active: false },
+    });
+    return result.count;
+  }
+
+  /**
    * Upsert a pass from on-chain event data (called by indexer)
-   * 
+   *
    * @param data The event data containing pass details from the blockchain.
    * @returns The upserted pass record, or null if the creator or tier is not found.
    */
@@ -239,66 +392,85 @@ export class PassesService {
       },
     });
 
-    const pass = await this.prisma.pass.upsert({
+    if (!existingPass) {
+      const priorPasses = await this.prisma.pass.findMany({
+        where: { fanId: fan.id, tierId: tier.id },
+      });
+
+      if (priorPasses.some((p) => p.trialUsed)) {
+        throw new ForbiddenException('Trial already used for this tier');
+      }
+
+      const isFirstTime = priorPasses.length === 0;
+      const isTrial = isFirstTime && tier.trialDays > 0;
+      const expiresAt = isTrial
+        ? new Date(data.purchasedAt.getTime() + tier.trialDays * 24 * 60 * 60 * 1000)
+        : data.expiresAt;
+
+      const pass = await this.prisma.pass.create({
+        data: {
+          onChainId: data.onChainId,
+          tierId: tier.id,
+          creatorId: creator.id,
+          fanId: fan.id,
+          purchasedAt: data.purchasedAt,
+          expiresAt,
+          txHash: data.txHash,
+          trialUsed: isTrial,
+          syncedAt: new Date(),
+        },
+      });
+
+      if (!isTrial) {
+        const amount = Number(tier.priceUsdc);
+        const fee = 0;
+        const netAmount = amount - fee;
+
+        if (this.metricsService) {
+          this.metricsService.incActivePasses(creator.stellarAddress);
+          this.metricsService.incRevenue(creator.stellarAddress, amount);
+        }
+
+        this.prisma.earningsRecord.create({
+          data: {
+            creatorId: creator.id,
+            fanId: fan.id,
+            tierId: tier.id,
+            amount,
+            fee,
+            netAmount,
+          },
+        }).catch((err) => {
+          this.logger.error(`Error recording earnings: ${err.message}`);
+        });
+
+        this.webhooksService.deliverPassPurchaseWebhook(creator.id, pass).catch((err) => {
+          this.logger.error(`Error triggering webhook: ${err.message}`);
+        });
+
+        if (creator.email) {
+          this.emailService.sendPassPurchaseEmail(
+            creator.email,
+            data.fanAddress,
+            tier.name,
+            tier.priceUsdc.toString()
+          ).catch((err) => {
+            this.logger.error(`Error triggering email: ${err.message}`);
+          });
+        }
+      }
+
+      return pass;
+    }
+
+    const pass = await this.prisma.pass.update({
       where: { onChainId: data.onChainId },
-      update: {
+      data: {
         expiresAt: data.expiresAt,
         txHash: data.txHash ?? undefined,
         syncedAt: new Date(),
       },
-      create: {
-        onChainId: data.onChainId,
-        tierId: tier.id,
-        creatorId: creator.id,
-        fanId: fan.id,
-        purchasedAt: data.purchasedAt,
-        expiresAt: data.expiresAt,
-        txHash: data.txHash,
-        syncedAt: new Date(),
-      },
     });
-
-    if (!existingPass) {
-      const amount = Number(tier.priceUsdc);
-      const fee = 0;
-      const netAmount = amount - fee;
-
-      // Track metrics if metricsService is available
-      if (this.metricsService) {
-        this.metricsService.incActivePasses(creator.stellarAddress);
-        this.metricsService.incRevenue(creator.stellarAddress, amount);
-      }
-
-      this.prisma.earningsRecord.create({
-        data: {
-          creatorId: creator.id,
-          fanId: fan.id,
-          tierId: tier.id,
-          amount,
-          fee,
-          netAmount,
-        },
-      }).catch((err) => {
-        this.logger.error(`Error recording earnings: ${err.message}`);
-      });
-
-      // Trigger webhook delivery asynchronously without blocking
-      this.webhooksService.deliverPassPurchaseWebhook(creator.id, pass).catch((err) => {
-        this.logger.error(`Error triggering webhook: ${err.message}`);
-      });
-
-      // Send email notification to creator
-      if (creator.email) {
-        this.emailService.sendPassPurchaseEmail(
-          creator.email,
-          data.fanAddress,
-          tier.name,
-          tier.priceUsdc.toString()
-        ).catch((err) => {
-          this.logger.error(`Error triggering email: ${err.message}`);
-        });
-      }
-    }
 
     return pass;
   }
@@ -338,12 +510,21 @@ export class PassesService {
     };
   }
 
+  /**
+   * Get a pass by its internal ID.
+   *
+   * @param id The pass record id.
+   * @returns The pass with tier, creator, and fan relations, or null if not found.
+   */
   async findById(id: string) {
     return this.prisma.pass.findUnique({ where: { id }, include: { tier: true, creator: true, fan: true } });
   }
 
   /**
-   * Find all passes with filtering and pagination
+   * Find all passes with filtering and pagination.
+   *
+   * @param filters Query filters for fan, tier, active status, expiry, and pagination.
+   * @returns Paginated pass list with total count.
    */
   async findAll(filters: ListPassesDto) {
     const { fan, tier_id, active, expired, page = 1, limit = 20 } = filters;
@@ -404,6 +585,7 @@ export class PassesService {
    * @param fanAddress The Stellar public key of the fan making the purchase.
    * @returns Array of created passes.
    * @throws {BadRequestException} If any tier IDs are invalid or inactive.
+   * @throws {ForbiddenException} If the fan is blocked or has already used a trial on a tier.
    */
   async purchaseBundle(tierIds: number[], fanAddress: string) {
     // Validate all tiers exist and are active
@@ -466,11 +648,20 @@ export class PassesService {
       const createdPasses: any[] = [];
 
       for (const tier of tiers) {
-        const expiresAt = new Date(
-          purchasedAt.getTime() + tier.durationDays * 24 * 60 * 60 * 1000,
-        );
+        const priorPasses = await tx.pass.findMany({
+          where: { fanId: fan.id, tierId: tier.id },
+        });
 
-        // Generate a unique on-chain ID for the pass (simulated)
+        if (priorPasses.some((p) => p.trialUsed)) {
+          throw new ForbiddenException('Trial already used for this tier');
+        }
+
+        const isFirstTime = priorPasses.length === 0;
+        const isTrial = isFirstTime && tier.trialDays > 0;
+        const expiresAt = isTrial
+          ? new Date(purchasedAt.getTime() + tier.trialDays * 24 * 60 * 60 * 1000)
+          : new Date(purchasedAt.getTime() + tier.durationDays * 24 * 60 * 60 * 1000);
+
         const onChainId = BigInt(Date.now()) + BigInt(Math.floor(Math.random() * 1000000));
 
         const pass = await tx.pass.create({
@@ -481,6 +672,7 @@ export class PassesService {
             fanId: fan.id,
             purchasedAt,
             expiresAt,
+            trialUsed: isTrial,
             syncedAt: now,
           },
           include: {
@@ -491,21 +683,22 @@ export class PassesService {
 
         createdPasses.push(pass);
 
-        // Record earnings for each pass
-        const amount = Number(tier.priceUsdc);
-        const fee = 0;
-        const netAmount = amount - fee;
+        if (!isTrial) {
+          const amount = Number(tier.priceUsdc);
+          const fee = 0;
+          const netAmount = amount - fee;
 
-        await tx.earningsRecord.create({
-          data: {
-            creatorId: tier.creatorId,
-            fanId: fan.id,
-            tierId: tier.id,
-            amount,
-            fee,
-            netAmount,
-          },
-        });
+          await tx.earningsRecord.create({
+            data: {
+              creatorId: tier.creatorId,
+              fanId: fan.id,
+              tierId: tier.id,
+              amount,
+              fee,
+              netAmount,
+            },
+          });
+        }
       }
 
       return createdPasses;
