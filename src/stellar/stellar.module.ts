@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
-import { StellarService } from './stellar.service';
+import { StellarService, StellarController } from './stellar.service';
 
 @Module({
+  controllers: [StellarController],
   providers: [StellarService],
   exports: [StellarService],
 })
