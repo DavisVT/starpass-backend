@@ -158,6 +158,44 @@ export class EmailService {
     }
   }
 
+  async sendPassRenewalFailedEmail(
+    fanEmail: string,
+    tierName: string,
+    creatorName: string,
+    error: string,
+  ): Promise<void> {
+    try {
+      const fromEmail = this.configService.get<string>('FROM_EMAIL', 'noreply@starpass.com');
+      const safeTierName = this.escapeHtml(tierName);
+      const safeCreatorName = this.escapeHtml(creatorName);
+      const safeError = this.escapeHtml(error);
+
+      const html = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Pass Auto-Renewal Failed</h2>
+          <p>We're sorry, but your pass auto-renewal failed.</p>
+          <ul>
+            <li><strong>Tier:</strong> ${safeTierName}</li>
+            <li><strong>Creator:</strong> ${safeCreatorName}</li>
+            <li><strong>Error:</strong> ${safeError}</li>
+          </ul>
+          <p>Auto-renewal has been disabled. Please log in to renew your pass manually.</p>
+        </div>
+      `;
+
+      await this.transporter.sendMail({
+        from: fromEmail,
+        to: fanEmail,
+        subject: 'Pass Auto-Renewal Failed - StarPass',
+        html,
+      });
+
+      this.logger.log(`Pass renewal failed email sent to ${fanEmail}.`);
+    } catch (error) {
+      this.logger.error(`Failed to send renewal failed email: ${error instanceof Error ? error.message : 'Unknown error'}`, error instanceof Error ? error.stack : undefined);
+    }
+  }
+
   private escapeHtml(value: string): string {
     return value.replace(/[&<>"']/g, (character) => {
       const entities: Record<string, string> = {

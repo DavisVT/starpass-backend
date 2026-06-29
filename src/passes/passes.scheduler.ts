@@ -13,4 +13,10 @@ export class PassesScheduler {
     const count = await this.passesService.deactivateExpiredPasses();
     this.logger.log(`Deactivated ${count} expired pass(es)`);
   }
+
+  @Cron('0 * * * *')
+  async processAutoRenewals() {
+    const count = await this.passesService.processExpiredPassesForAutoRenew();
+    this.logger.log(`Processed ${count} pass(es) for auto-renewal`);
+  }
 }

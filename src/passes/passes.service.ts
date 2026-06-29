@@ -6,6 +6,7 @@ import { EmailService } from '../notifications/email.service';
 import { AdminConfigService } from '../admin/admin-config.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
+import { StellarService } from '../stellar/stellar.service';
 
 @Injectable()
 export class PassesService {
@@ -17,6 +18,7 @@ export class PassesService {
     private emailService: EmailService,
     private adminConfigService: AdminConfigService,
     private metricsService: MetricsService,
+    private stellarService: StellarService,
     @Optional() private notificationsGateway?: NotificationsGateway,
   ) {}
 
@@ -950,5 +952,253 @@ export class PassesService {
     }
 
     return expiringPasses.length;
+  }
+
+  async toggleAutoRenew(passId: string, fanAddress: string, enable: boolean) {
+    const pass = await this.prisma.pass.findUnique({
+      where: { id: passId },
+      include: { fan: true },
+    });
+
+    if (!pass) {
+      throw new NotFoundException('Pass not found');
+    }
+
+    if (pass.fan.stellarAddress !== fanAddress) {
+      throw new ForbiddenException('Only the pass owner can toggle auto-renew');
+    }
+
+    return this.prisma.pass.update({
+      where: { id: passId },
+      data: { autoRenew: enable },
+    });
+  }
+
+  async processExpiredPassesForAutoRenew() {
+    const now = new Date();
+    const expiredPasses = await this.prisma.pass.findMany({
+      where: {
+        active: true,
+        expiresAt: { lte: now },
+        autoRenew: true,
+        supersededBy: null,
+      },
+      include: { tier: true, fan: true, creator: true },
+    });
+
+    for (const pass of expiredPasses) {
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          // First mark the pass as inactive
+          await tx.pass.update({
+            where: { id: pass.id },
+            data: { active: false },
+          });
+
+          // Create renewal attempt
+          const renewalAttempt = await tx.renewalAttempt.create({
+            data: {
+              passId: pass.id,
+              status: 'PENDING',
+            },
+          });
+
+          // Trigger renewal via Stellar/Soroban
+          const txHash = await this.stellarService.renewPass(pass.onChainId, pass.tier.onChainId);
+
+          // Mint new pass
+          const newPass = await this.mintPass(
+            pass.tier.onChainId,
+            pass.fan.stellarAddress,
+            {
+              tx,
+              txHash,
+            }
+          );
+
+          // Update old pass
+          await tx.pass.update({
+            where: { id: pass.id },
+            data: { supersededBy: newPass.id },
+          });
+
+          // Update renewal attempt
+          await tx.renewalAttempt.update({
+            where: { id: renewalAttempt.id },
+            data: { status: 'SUCCESS', txHash },
+          });
+
+          this.logger.log(`Successfully renewed pass ${pass.id} -> ${newPass.id}`);
+        });
+      } catch (error) {
+        this.logger.error(`Failed to renew pass ${pass.id}: ${error.message}`);
+
+        // Mark renewal attempt as failed
+        await this.prisma.renewalAttempt.create({
+          data: {
+            passId: pass.id,
+            status: 'FAILED',
+            error: error.message,
+          },
+        });
+
+        // Disable auto-renew
+        await this.prisma.pass.update({
+          where: { id: pass.id },
+          data: { autoRenew: false },
+        });
+
+        // Notify fan
+        if (this.notificationsGateway) {
+          this.notificationsGateway.emitPassRenewalFailedEvent(
+            pass.fan.stellarAddress,
+            {
+              passId: pass.id,
+              tierName: pass.tier.name,
+              creatorName: pass.creator.displayName,
+              error: error.message,
+            }
+          ).catch((err) => {
+            this.logger.error(`Error emitting renewal failed event: ${err.message}`);
+          });
+        }
+
+        if (pass.fan.email) {
+          this.emailService.sendPassRenewalFailedEmail(
+            pass.fan.email,
+            pass.tier.name,
+            pass.creator.displayName,
+            error.message
+          ).catch((err) => {
+            this.logger.error(`Error sending renewal failed email: ${err.message}`);
+          });
+        }
+      }
+    }
+
+    return expiredPasses.length;
+  }
+
+  async changeTier(passId: string, newTierId: string, fanAddress: string) {
+    const now = new Date();
+
+    const pass = await this.prisma.pass.findUnique({
+      where: { id: passId },
+      include: { tier: true, fan: true },
+    });
+
+    if (!pass) {
+      throw new NotFoundException('Pass not found');
+    }
+
+    if (pass.fan.stellarAddress !== fanAddress) {
+      throw new ForbiddenException('Only the pass owner can change tiers');
+    }
+
+    if (!pass.active || pass.expiresAt < now) {
+      throw new BadRequestException('Pass is not active or is expired');
+    }
+
+    if (pass.tierId === newTierId) {
+      throw new BadRequestException('New tier must differ from current tier');
+    }
+
+    const newTier = await this.prisma.tier.findUnique({
+      where: { id: newTierId },
+    });
+
+    if (!newTier || !newTier.active) {
+      throw new BadRequestException('New tier not found or inactive');
+    }
+
+    if (newTier.creatorId !== pass.creatorId) {
+      throw new BadRequestException('New tier must belong to the same creator');
+    }
+
+    // Calculate remaining time
+    const totalDurationMs = pass.tier.durationDays * 24 * 60 * 60 * 1000;
+    const elapsedMs = now.getTime() - pass.purchasedAt.getTime();
+    const remainingMs = Math.max(0, totalDurationMs - elapsedMs);
+    const remainingRatio = remainingMs / totalDurationMs;
+
+    // Calculate remaining value
+    const oldPrice = Number(pass.tier.priceUsdc);
+    const newPrice = Number(newTier.priceUsdc);
+    const remainingValue = oldPrice * remainingRatio;
+
+    // Calculate new duration (based on remaining value and new tier price)
+    const newDurationDays = newPrice > 0 
+      ? (remainingValue / newPrice) * newTier.durationDays 
+      : newTier.durationDays;
+
+    // Ensure minimum 1 day
+    const finalDurationDays = Math.max(1, Math.floor(newDurationDays));
+
+    // Determine if upgrade or downgrade
+    const isUpgrade = newPrice > oldPrice;
+    const priceDifference = newPrice - remainingValue;
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Mark old pass as superseded and inactive
+      const updatedOldPass = await tx.pass.update({
+        where: { id: passId },
+        data: {
+          active: false,
+          supersededBy: passId, // temporary, will be updated with new pass id
+        },
+      });
+
+      // Create new pass
+      const newPass = await tx.pass.create({
+        data: {
+          onChainId: BigInt(Date.now()) + BigInt(Math.floor(Math.random() * 1000000)),
+          tierId: newTierId,
+          creatorId: pass.creatorId,
+          fanId: pass.fanId,
+          purchasedAt: now,
+          expiresAt: new Date(now.getTime() + finalDurationDays * 24 * 60 * 60 * 1000),
+          txHash: pass.txHash,
+          trialUsed: pass.trialUsed,
+          autoRenew: pass.autoRenew,
+          syncedAt: now,
+        },
+        include: { tier: true, creator: true, fan: true },
+      });
+
+      // Update old pass's supersededBy with new pass id
+      await tx.pass.update({
+        where: { id: passId },
+        data: { supersededBy: newPass.id },
+      });
+
+      return { oldPass: updatedOldPass, newPass, isUpgrade, priceDifference, remainingValue };
+    });
+
+    // Emit events
+    if (result.isUpgrade) {
+      this.webhooksService.deliverPassPurchaseWebhook(result.newPass.creatorId, {
+        event: 'pass.tier_upgraded',
+        oldPass: result.oldPass,
+        newPass: result.newPass,
+        priceDifference: result.priceDifference,
+        remainingValue: result.remainingValue,
+      }).catch(() => {});
+    } else {
+      this.webhooksService.deliverPassPurchaseWebhook(result.newPass.creatorId, {
+        event: 'pass.tier_downgraded',
+        oldPass: result.oldPass,
+        newPass: result.newPass,
+        priceDifference: result.priceDifference,
+        remainingValue: result.remainingValue,
+      }).catch(() => {});
+    }
+
+    this.webhooksService.deliverPassPurchaseWebhook(result.newPass.creatorId, {
+      event: 'pass.superseded',
+      oldPass: result.oldPass,
+      newPass: result.newPass,
+    }).catch(() => {});
+
+    return result.newPass;
   }
 }

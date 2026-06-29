@@ -93,6 +93,18 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     this.logger.log(`Emitted pass_expiring_soon event to room ${roomName}`);
   }
 
+  /**
+   * Emit pass_renewal_failed event when a pass auto-renewal fails
+   */
+  async emitPassRenewalFailedEvent(fanAddress: string, data: any) {
+    const roomName = `fan:${fanAddress}`;
+    this.server.to(roomName).emit('pass_renewal_failed', {
+      data,
+      timestamp: new Date().toISOString(),
+    });
+    this.logger.log(`Emitted pass_renewal_failed event to room ${roomName}`);
+  }
+
   @SubscribeMessage('join')
   handleJoin(@ConnectedSocket() client: Socket, @MessageBody() data: { fanAddress: string }) {
     const roomName = `fan:${data.fanAddress}`;
