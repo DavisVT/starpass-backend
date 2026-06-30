@@ -112,19 +112,17 @@ describe('HealthController', () => {
       mockPrismaService.$queryRaw.mockRejectedValueOnce(new Error('DB Down'));
       mockStellarService.getLatestLedger.mockResolvedValueOnce(12345);
 
-      await expect(controller.getDeepHealth()).rejects.toThrow(
-        ServiceUnavailableException,
-      );
-
+      let error: any;
       try {
         await controller.getDeepHealth();
-      } catch (error: any) {
-        expect(error).toBeInstanceOf(ServiceUnavailableException);
-        const response = error.getResponse();
-        expect(response.status).toEqual('error');
-        expect(response.dependencies.database.status).toEqual('down');
-        expect(response.dependencies.stellar).toEqual('up');
+      } catch (e) {
+        error = e;
       }
+      expect(error).toBeInstanceOf(ServiceUnavailableException);
+      const response = error.getResponse();
+      expect(response.status).toEqual('error');
+      expect(response.dependencies.database.status).toEqual('down');
+      expect(response.dependencies.stellar).toEqual('up');
     });
 
     it('should throw ServiceUnavailableException when Stellar is down', async () => {
@@ -137,38 +135,34 @@ describe('HealthController', () => {
       });
       mockStellarService.getLatestLedger.mockRejectedValueOnce(new Error('Stellar Down'));
 
-      await expect(controller.getDeepHealth()).rejects.toThrow(
-        ServiceUnavailableException,
-      );
-
+      let error: any;
       try {
         await controller.getDeepHealth();
-      } catch (error: any) {
-        expect(error).toBeInstanceOf(ServiceUnavailableException);
-        const response = error.getResponse();
-        expect(response.status).toEqual('error');
-        expect(response.dependencies.database.status).toEqual('up');
-        expect(response.dependencies.stellar).toEqual('down');
+      } catch (e) {
+        error = e;
       }
+      expect(error).toBeInstanceOf(ServiceUnavailableException);
+      const response = error.getResponse();
+      expect(response.status).toEqual('error');
+      expect(response.dependencies.database.status).toEqual('up');
+      expect(response.dependencies.stellar).toEqual('down');
     });
 
     it('should throw ServiceUnavailableException when both are down', async () => {
       mockPrismaService.$queryRaw.mockRejectedValueOnce(new Error('DB Down'));
       mockStellarService.getLatestLedger.mockRejectedValueOnce(new Error('Stellar Down'));
 
-      await expect(controller.getDeepHealth()).rejects.toThrow(
-        ServiceUnavailableException,
-      );
-
+      let error: any;
       try {
         await controller.getDeepHealth();
-      } catch (error: any) {
-        expect(error).toBeInstanceOf(ServiceUnavailableException);
-        const response = error.getResponse();
-        expect(response.status).toEqual('error');
-        expect(response.dependencies.database.status).toEqual('down');
-        expect(response.dependencies.stellar).toEqual('down');
+      } catch (e) {
+        error = e;
       }
+      expect(error).toBeInstanceOf(ServiceUnavailableException);
+      const response = error.getResponse();
+      expect(response.status).toEqual('error');
+      expect(response.dependencies.database.status).toEqual('down');
+      expect(response.dependencies.stellar).toEqual('down');
     });
 
     it('should report slow query count in deep health check', async () => {
