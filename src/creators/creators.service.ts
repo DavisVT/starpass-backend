@@ -760,4 +760,24 @@ export class CreatorsService {
 
     return apiKey;
   }
+
+  async uploadAvatar(userId: string, file: Express.Multer.File) {
+    const creator = await this.prisma.creator.findUnique({ where: { userId } });
+    if (!creator) throw new NotFoundException('Creator not found');
+
+    // For now, we'll just use a placeholder URL. In a real implementation, you would upload the file
+    // to a storage service (S3, IPFS, etc.) and use that URL.
+    const avatarUrl = `/uploads/avatars/${creator.id}-${Date.now()}${file.originalname.substring(file.originalname.lastIndexOf('.'))}`;
+
+    const updatedCreator = await this.prisma.creator.update({
+      where: { userId },
+      data: { avatarUrl },
+    });
+
+    try {
+      await this.cacheManager?.del(`creator:${creator.stellarAddress}`);
+    } catch {}
+
+    return updatedCreator;
+  }
 }
