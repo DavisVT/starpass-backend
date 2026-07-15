@@ -16,6 +16,7 @@ describe('CreatorsController', () => {
     findAll: jest.fn(),
     getRevenue: jest.fn(),
     getPayouts: jest.fn(),
+    uploadAvatar: jest.fn(),
   };
   const mockWebhooksService = {
     register: jest.fn(),
@@ -174,6 +175,39 @@ describe('CreatorsController', () => {
       await controller.getPayouts(creatorId, {}, { user: { sub: creatorId } });
 
       expect(creatorsService.getPayouts).toHaveBeenCalledWith(creatorId, creatorId, {});
+    });
+  });
+
+  // ─── uploadAvatar ─────────────────────────────────────────────────────────
+
+  describe('uploadAvatar', () => {
+    const creatorId = 'user-123';
+    const mockFile = {
+      originalname: 'test.jpg',
+      mimetype: 'image/jpeg',
+      size: 1024 * 1024,
+      buffer: Buffer.from('test'),
+    } as Express.Multer.File;
+    const mockCreator = { id: 'creator-1', userId: creatorId, avatarUrl: '/uploads/avatars/123.jpg' };
+
+    it('should call CreatorsService.uploadAvatar with the correct params', async () => {
+      mockCreatorsService.uploadAvatar.mockResolvedValue(mockCreator);
+
+      await controller.uploadAvatar(creatorId, mockFile, { user: { sub: creatorId } });
+
+      expect(creatorsService.uploadAvatar).toHaveBeenCalledWith(creatorId, mockFile);
+    });
+
+    it('should throw ForbiddenException when authenticated user does not match path id', async () => {
+      expect(() =>
+        controller.uploadAvatar(creatorId, mockFile, { user: { sub: 'user-456' } }),
+      ).toThrow(ForbiddenException);
+    });
+
+    it('should throw BadRequestException when no file is provided', async () => {
+      await expect(
+        controller.uploadAvatar(creatorId, undefined as any, { user: { sub: creatorId } }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });
