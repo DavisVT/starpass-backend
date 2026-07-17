@@ -17,6 +17,8 @@ import { RegisterWebhookDto } from '../webhooks/dto/register-webhook.dto';
 import { CreatorAnalyticsDto } from './creator-analytics.dto';
 import { BlockFanDto } from './dto/block-fan.dto';
 import { XCacheInterceptor } from '../common/cache/cache.interceptor';
+import { TiersService } from '../tiers/tiers.service';
+import { ReorderTiersDto } from '../tiers/dto/reorder-tiers.dto';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -27,6 +29,7 @@ export class CreatorsController {
   constructor(
     private creatorsService: CreatorsService,
     private webhooksService: WebhooksService,
+    private tiersService: TiersService,
   ) {}
 
   @Get('featured')
@@ -92,6 +95,21 @@ export class CreatorsController {
     }
 
     return this.creatorsService.updateCategories(id, dto.categories);
+  }
+
+  @Patch(':id/tiers/order')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reorder tiers for a creator' })
+  @ApiResponse({ status: 200, description: 'Tiers reordered successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid tierIds' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Not your creator profile' })
+  reorderTiers(@Param('id') id: string, @Body() dto: ReorderTiersDto, @Request() req: any) {
+    if (req.user?.sub !== id) {
+      throw new ForbiddenException('You can only reorder tiers for your own profile');
+    }
+    return this.tiersService.reorderTiers(id, dto);
   }
   @Get(':address/earnings')
   @UseGuards(JwtAuthGuard)

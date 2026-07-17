@@ -50,7 +50,7 @@ describe('TiersService', () => {
         where: {},
         skip: 0,
         take: 20,
-        orderBy: { onChainId: 'asc' },
+        orderBy: { sortOrder: 'asc' },
       });
       expect(prisma.tier.count).toHaveBeenCalledWith({ where: {} });
     });
@@ -66,7 +66,7 @@ describe('TiersService', () => {
         where: { creatorId: 'creator-123' },
         skip: 20,
         take: 10,
-        orderBy: { onChainId: 'asc' },
+        orderBy: { sortOrder: 'asc' },
       });
       expect(prisma.tier.count).toHaveBeenCalledWith({
         where: { creatorId: 'creator-123' },
