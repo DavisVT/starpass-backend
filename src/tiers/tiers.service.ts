@@ -6,7 +6,9 @@ import {
   Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { CryptoService } from '../common/crypto.service';
 import { CreateTierDto } from './dto/create-tier.dto';
+import { CreateTierContentDto } from './dto/create-tier-content.dto';
 import { TierAnalyticsDto } from './tier-analytics.dto';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
@@ -18,6 +20,7 @@ const UNLOCK_TTL_SECONDS = 15 * 60; // 15 minutes
 export class TiersService {
   constructor(
     private prisma: PrismaService,
+    private cryptoService: CryptoService,
     @Optional() private config?: ConfigService,
     @Optional() private notificationsGateway?: NotificationsGateway,
   ) {}
@@ -61,9 +64,10 @@ export class TiersService {
     const creator = await this.prisma.creator.findUnique({ where: { stellarAddress: creatorAddress } });
     if (!creator) throw new NotFoundException('Creator not found');
 
-    const createdTiers = await this.prisma.$transaction(
-      dtos.map((dto) =>
-        this.prisma.tier.create({
+    const createdTiers = await this.prisma.$transaction(async (tx) => {
+      const tiers = [];
+      for (const dto of dtos) {
+        const tier = await tx.tier.create({
           data: {
             onChainId: dto.onChainId,
             creatorId: creator.id,
@@ -76,9 +80,23 @@ export class TiersService {
             active: dto.active ?? true,
             syncedAt: new Date(),
           },
-        }),
-      ),
-    );
+        });
+
+        const contentKey = this.cryptoService.generateAes256GcmKey();
+        const encryptedKey = this.cryptoService.encryptKeyWithMasterKey(contentKey);
+        
+        await tx.tierContentKey.create({
+          data: {
+            tierId: tier.id,
+            encryptedKey,
+            keyVersion: 1,
+          },
+        });
+
+        tiers.push(tier);
+      }
+      return tiers;
+    });
 
     // Emit new_tier event for each created tier
     if (this.notificationsGateway) {
@@ -414,5 +432,118 @@ export class TiersService {
     } catch {
       return { valid: false };
     }
+  }
+
+  async createTierContent(tierId: string, creatorAddress: string, dto: CreateTierContentDto) {
+    const tier = await this.prisma.tier.findUnique({
+      where: { id: tierId },
+      include: { creator: true },
+    });
+
+    if (!tier) throw new NotFoundException('Tier not found');
+    if (tier.creator.stellarAddress !== creatorAddress) {
+      throw new ForbiddenException('You are not the owner of this tier');
+    }
+
+    const contentKey = await this.prisma.tierContentKey.findFirst({
+      where: { tierId },
+      orderBy: { keyVersion: 'desc' },
+    });
+
+    if (!contentKey) throw new NotFoundException('Tier content key not found');
+
+    const plaintextContentKey = this.cryptoService.decryptKeyWithMasterKey(contentKey.encryptedKey);
+    const { ciphertext, iv, authTag } = this.cryptoService.encryptWithAes256Gcm(
+      Buffer.from(dto.content),
+      plaintextContentKey
+    );
+
+    return this.prisma.tierContent.create({
+      data: {
+        tierId,
+        creatorId: tier.creatorId,
+        encryptedContentUrl: ciphertext.toString('base64'),
+        contentKeyId: contentKey.id,
+        iv: iv.toString('base64'),
+        authTag: authTag.toString('base64'),
+      },
+    });
+  }
+
+  async getFanEncryptedContentKey(tierId: string, fanAddress: string) {
+    const tier = await this.prisma.tier.findUnique({ where: { id: tierId } });
+    if (!tier) throw new NotFoundException('Tier not found');
+
+    const fan = await this.prisma.fan.findUnique({ where: { stellarAddress: fanAddress } });
+    const hasPass = fan
+      ? !!(await this.prisma.pass.findFirst({
+          where: { fanId: fan.id, tierId, active: true, expiresAt: { gt: new Date() } },
+        }))
+      : false;
+
+    if (!hasPass) throw new ForbiddenException('No valid pass for this tier');
+
+    const contentKey = await this.prisma.tierContentKey.findFirst({
+      where: { tierId },
+      orderBy: { keyVersion: 'desc' },
+    });
+
+    if (!contentKey) throw new NotFoundException('Tier content key not found');
+
+    const plaintextContentKey = this.cryptoService.decryptKeyWithMasterKey(contentKey.encryptedKey);
+    const fanPublicKey = this.cryptoService.getRawEd25519PublicKeyFromStellarAddress(fanAddress);
+    const wrappedKey = this.cryptoService.wrapKeyWithFanPublicKey(plaintextContentKey, fanPublicKey);
+
+    const latestContent = await this.prisma.tierContent.findFirst({
+      where: { tierId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      wrappedKey,
+      keyVersion: contentKey.keyVersion,
+      content: latestContent,
+    };
+  }
+
+  async rotateTierContentKey(tierId: string, creatorAddress: string) {
+    const tier = await this.prisma.tier.findUnique({
+      where: { id: tierId },
+      include: { creator: true },
+    });
+
+    if (!tier) throw new NotFoundException('Tier not found');
+    if (tier.creator.stellarAddress !== creatorAddress) {
+      throw new ForbiddenException('You are not the owner of this tier');
+    }
+
+    const currentKey = await this.prisma.tierContentKey.findFirst({
+      where: { tierId },
+      orderBy: { keyVersion: 'desc' },
+    });
+
+    if (!currentKey) throw new NotFoundException('Tier content key not found');
+
+    const newKeyVersion = currentKey.keyVersion + 1;
+    const newContentKey = this.cryptoService.generateAes256GcmKey();
+    const encryptedNewKey = this.cryptoService.encryptKeyWithMasterKey(newContentKey);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.tierContentKey.create({
+        data: {
+          tierId,
+          encryptedKey: encryptedNewKey,
+          keyVersion: newKeyVersion,
+          rotatedAt: new Date(),
+        },
+      });
+
+      await tx.tierContentKey.update({
+        where: { id: currentKey.id },
+        data: { rotatedAt: new Date() },
+      });
+    });
+
+    return { keyVersion: newKeyVersion };
   }
 }

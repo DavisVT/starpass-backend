@@ -283,6 +283,40 @@ model ContentSchedule {
   @@map("content_schedules")
 }
 
+model TierContentKey {
+  id          String   @id @default(uuid())
+  tierId      String   @map("tier_id")
+  encryptedKey String  @map("encrypted_key") // Encrypted with server master key
+  keyVersion  Int      @default(1) @map("key_version")
+  rotatedAt   DateTime? @map("rotated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tier        Tier     @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  content     TierContent[]
+
+  @@unique([tierId, keyVersion])
+  @@map("tier_content_keys")
+}
+
+model TierContent {
+  id               String   @id @default(uuid())
+  tierId           String   @map("tier_id")
+  creatorId        String   @map("creator_id")
+  encryptedContentUrl String? @map("encrypted_content_url") // Optional if content is stored elsewhere
+  contentKeyId     String   @map("content_key_id")
+  iv               String   // Base64 encoded AES-GCM IV
+  authTag          String   // Base64 encoded AES-GCM auth tag
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  tier             Tier     @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  creator          Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  contentKey       TierContentKey @relation(fields: [contentKeyId], references: [id], onDelete: Cascade)
+
+  @@map("tier_content")
+}
+
 model Notification {
   id        String   @id @default(uuid())
   fanId     String   @map("fan_id")

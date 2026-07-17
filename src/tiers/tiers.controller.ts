@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Param, ParseIntPipe, UseGuards, Request, UseInterceptors, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Param, ParseIntPipe, UseGuards, Request, UseInterceptors, Query, BadRequestException, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { CacheTTL } from '@nestjs/cache-manager';
 import { TiersService } from './tiers.service';
 import { TierAnalyticsDto } from './tier-analytics.dto';
+import { CreateTierContentDto } from './dto/create-tier-content.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { XCacheInterceptor } from '../common/cache/cache.interceptor';
 
@@ -100,5 +101,42 @@ export class TiersController {
   @ApiResponse({ status: 200, description: 'Token validity result' })
   verify(@Param('id') id: string, @Query('token') token: string) {
     return this.tiersService.verifyContentToken(id, token);
+  }
+
+  @Post(':id/content')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create encrypted content for a tier' })
+  @ApiResponse({ status: 201, description: 'Content created' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Tier not found' })
+  createContent(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() dto: CreateTierContentDto,
+  ) {
+    return this.tiersService.createTierContent(id, req.user.address, dto);
+  }
+
+  @Get(':id/content/key')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get fan-encrypted content key for a tier' })
+  @ApiResponse({ status: 200, description: 'Encrypted key returned' })
+  @ApiResponse({ status: 403, description: 'No valid pass' })
+  @ApiResponse({ status: 404, description: 'Tier not found' })
+  getContentKey(@Param('id') id: string, @Request() req: any) {
+    return this.tiersService.getFanEncryptedContentKey(id, req.user.address);
+  }
+
+  @Post(':id/content/rotate-key')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Rotate tier content key' })
+  @ApiResponse({ status: 200, description: 'Key rotated' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Tier not found' })
+  rotateKey(@Param('id') id: string, @Request() req: any) {
+    return this.tiersService.rotateTierContentKey(id, req.user.address);
   }
 }

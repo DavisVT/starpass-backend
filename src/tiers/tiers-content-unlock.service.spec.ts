@@ -3,6 +3,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TiersService } from './tiers.service';
 import { PrismaService } from '../common/prisma.service';
+import { CryptoService } from '../common/crypto.service';
 
 describe('TiersService – content unlock', () => {
   let service: TiersService;
@@ -10,15 +11,49 @@ describe('TiersService – content unlock', () => {
   const TIER_ID = 'tier-uuid';
   const FAN_ADDRESS = 'GB_FAN';
   const SECRET = 'test-secret';
+  const CREATOR_ADDRESS = 'G_CREATOR';
+  const TEST_SERVER_MASTER_KEY = 'a'.repeat(64);
+  const TEST_SERVER_X25519_KEY = 'b'.repeat(64);
+
+  const mockCryptoService = {
+    generateAes256GcmKey: jest.fn().mockReturnValue(Buffer.from('c'.repeat(64), 'hex')),
+    encryptKeyWithMasterKey: jest.fn().mockReturnValue('encrypted-key'),
+    decryptKeyWithMasterKey: jest.fn().mockReturnValue(Buffer.from('c'.repeat(64), 'hex')),
+    encryptWithAes256Gcm: jest.fn().mockReturnValue({ 
+      ciphertext: Buffer.from('encrypted-content'), 
+      iv: Buffer.from('iv'), 
+      authTag: Buffer.from('tag') 
+    }),
+    getRawEd25519PublicKeyFromStellarAddress: jest.fn().mockReturnValue(Buffer.from('fan-pub-key')),
+    wrapKeyWithFanPublicKey: jest.fn().mockReturnValue({ 
+      wrappedKey: 'wrapped-key', 
+      serverPublicKey: 'server-pub-key', 
+      nonce: 'nonce' 
+    }),
+  };
 
   const mockPrisma = {
     creator: { findUnique: jest.fn() },
-    tier: { findUnique: jest.fn(), findMany: jest.fn(), upsert: jest.fn() },
+    tier: { findUnique: jest.fn(), findMany: jest.fn(), upsert: jest.fn(), create: jest.fn() },
     fan: { findUnique: jest.fn() },
     pass: { findFirst: jest.fn() },
+    tierContentKey: { 
+      findFirst: jest.fn(), 
+      create: jest.fn(), 
+      update: jest.fn() 
+    },
+    tierContent: { create: jest.fn(), findFirst: jest.fn() },
+    $transaction: jest.fn().mockImplementation(async (fn) => {
+      return await fn(mockPrisma);
+    }),
   };
 
-  const mockConfig = { get: jest.fn().mockReturnValue(SECRET) };
+  const mockConfig = { get: jest.fn().mockImplementation((key: string) => {
+    if (key === 'CONTENT_URL_SECRET') return SECRET;
+    if (key === 'SERVER_MASTER_KEY') return TEST_SERVER_MASTER_KEY;
+    if (key === 'SERVER_X25519_PRIVATE_KEY') return TEST_SERVER_X25519_KEY;
+    return undefined;
+  }) };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -26,12 +61,18 @@ describe('TiersService – content unlock', () => {
         TiersService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: ConfigService, useValue: mockConfig },
+        { provide: CryptoService, useValue: mockCryptoService },
       ],
     }).compile();
 
     service = module.get<TiersService>(TiersService);
     jest.clearAllMocks();
-    mockConfig.get.mockReturnValue(SECRET);
+    mockConfig.get.mockImplementation((key: string) => {
+      if (key === 'CONTENT_URL_SECRET') return SECRET;
+      if (key === 'SERVER_MASTER_KEY') return TEST_SERVER_MASTER_KEY;
+      if (key === 'SERVER_X25519_PRIVATE_KEY') return TEST_SERVER_X25519_KEY;
+      return undefined;
+    });
   });
 
   describe('unlockContent', () => {
@@ -117,6 +158,81 @@ describe('TiersService – content unlock', () => {
 
     it('returns valid=false for a malformed token', () => {
       expect(service.verifyContentToken(TIER_ID, 'not-a-real-token')).toEqual({ valid: false });
+    });
+  });
+
+  describe('createTierContent', () => {
+    it('should create encrypted content for a tier', async () => {
+      mockPrisma.tier.findUnique.mockResolvedValue({ 
+        id: TIER_ID, 
+        creatorId: 'creator-id',
+        creator: { stellarAddress: CREATOR_ADDRESS } 
+      });
+      mockPrisma.tierContentKey.findFirst.mockResolvedValue({ id: 'content-key-id', keyVersion: 1 });
+      mockPrisma.tierContent.create.mockResolvedValue({ id: 'content-id' });
+
+      const result = await service.createTierContent(TIER_ID, CREATOR_ADDRESS, { content: 'Test content' });
+      
+      expect(result).toEqual({ id: 'content-id' });
+    });
+
+    it('should throw NotFoundException if tier does not exist', async () => {
+      mockPrisma.tier.findUnique.mockResolvedValue(null);
+      await expect(service.createTierContent(TIER_ID, CREATOR_ADDRESS, { content: 'Test' })).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('should throw ForbiddenException if not tier owner', async () => {
+      mockPrisma.tier.findUnique.mockResolvedValue({ 
+        id: TIER_ID, 
+        creatorId: 'creator-id',
+        creator: { stellarAddress: 'OTHER_CREATOR' } 
+      });
+      await expect(service.createTierContent(TIER_ID, CREATOR_ADDRESS, { content: 'Test' })).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('getFanEncryptedContentKey', () => {
+    it('should return wrapped key for valid pass holders', async () => {
+      mockPrisma.tier.findUnique.mockResolvedValue({ id: TIER_ID });
+      mockPrisma.fan.findUnique.mockResolvedValue({ id: 'fan-id' });
+      mockPrisma.pass.findFirst.mockResolvedValue({ id: 'pass-id' });
+      mockPrisma.tierContentKey.findFirst.mockResolvedValue({ id: 'key-id', keyVersion: 1 });
+      mockPrisma.tierContent.findFirst.mockResolvedValue({ id: 'content-id' });
+
+      const result = await service.getFanEncryptedContentKey(TIER_ID, FAN_ADDRESS);
+      
+      expect(result).toHaveProperty('wrappedKey');
+      expect(result).toHaveProperty('keyVersion');
+      expect(result).toHaveProperty('content');
+    });
+
+    it('should throw NotFoundException when tier not found', async () => {
+      mockPrisma.tier.findUnique.mockResolvedValue(null);
+      await expect(service.getFanEncryptedContentKey(TIER_ID, FAN_ADDRESS)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('should throw ForbiddenException when no valid pass', async () => {
+      mockPrisma.tier.findUnique.mockResolvedValue({ id: TIER_ID });
+      mockPrisma.fan.findUnique.mockResolvedValue({ id: 'fan-id' });
+      mockPrisma.pass.findFirst.mockResolvedValue(null);
+
+      await expect(service.getFanEncryptedContentKey(TIER_ID, FAN_ADDRESS)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('rotateTierContentKey', () => {
+    it('should rotate key and increment version', async () => {
+      mockPrisma.tier.findUnique.mockResolvedValue({ 
+        id: TIER_ID, 
+        creatorId: 'creator-id',
+        creator: { stellarAddress: CREATOR_ADDRESS } 
+      });
+      mockPrisma.tierContentKey.findFirst.mockResolvedValue({ id: 'old-key-id', keyVersion: 1 });
+      mockPrisma.tierContentKey.create.mockResolvedValue({ id: 'new-key-id', keyVersion: 2 });
+      
+      const result = await service.rotateTierContentKey(TIER_ID, CREATOR_ADDRESS);
+      
+      expect(result.keyVersion).toBe(2);
     });
   });
 });
