@@ -80,3 +80,7 @@ fan(address: "G...") {
 - REST endpoints unchanged and fully functional
 
 closes #70
+
+---
+
+> **Note for reviewers:** The ticket specified `GET /creators/:id/earnings` as the new endpoint, but `GET /creators/:id/earnings-history` already existed and fully satisfies the requirement. The separate `GET /creators/:address/earnings` is a pre-existing public summary endpoint and was left untouched.

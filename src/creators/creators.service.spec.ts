@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { CreatorsService } from './creators.service';
 import { PrismaService } from '../common/prisma.service';
 
@@ -16,6 +16,11 @@ describe('CreatorsService', () => {
       findMany: jest.fn(),
     },
     payout: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
+    },
+    earningsRecord: {
       create: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
@@ -220,6 +225,129 @@ describe('CreatorsService', () => {
       const result = await service.getPayouts('user-uuid', 'user-uuid', { page: 1, limit: 20 });
 
       expect(result).toEqual({ data: [], total: 0, page: 1, limit: 20 });
+    });
+  });
+
+  // ─── getEarningsHistory ────────────────────────────────────────────────────
+
+  describe('getEarningsHistory', () => {
+    const mockCreator = { id: 'creator-uuid', userId: 'user-uuid' };
+
+    const mockRecords = [
+      {
+        id: 'rec-1',
+        creatorId: 'creator-uuid',
+        fanId: 'fan-uuid',
+        tierId: 'tier-uuid',
+        amount: 25,
+        fee: 0,
+        netAmount: 25,
+        createdAt: new Date('2026-06-10T12:00:00Z'),
+        fan: { id: 'fan-uuid', stellarAddress: 'GB_FAN' },
+        tier: { id: 'tier-uuid', name: 'Gold' },
+      },
+      {
+        id: 'rec-2',
+        creatorId: 'creator-uuid',
+        fanId: 'fan-uuid-2',
+        tierId: 'tier-uuid',
+        amount: 25,
+        fee: 0,
+        netAmount: 25,
+        createdAt: new Date('2026-05-01T00:00:00Z'),
+        fan: { id: 'fan-uuid-2', stellarAddress: 'GB_FAN2' },
+        tier: { id: 'tier-uuid', name: 'Gold' },
+      },
+    ];
+
+    beforeEach(() => {
+      mockPrismaService.creator.findUnique.mockResolvedValue(mockCreator);
+      mockPrismaService.earningsRecord.findMany.mockResolvedValue(mockRecords);
+      mockPrismaService.earningsRecord.count.mockResolvedValue(mockRecords.length);
+    });
+
+    it('earnings record is created on a successful pass purchase with correct amount/fee/netAmount', async () => {
+      mockPrismaService.earningsRecord.create.mockResolvedValue({
+        id: 'rec-new',
+        creatorId: 'creator-uuid',
+        fanId: 'fan-uuid',
+        tierId: 'tier-uuid',
+        amount: 25,
+        fee: 0,
+        netAmount: 25,
+        createdAt: new Date(),
+      });
+
+      const result = await service.recordEarning('creator-uuid', 'fan-uuid', 'tier-uuid', 25);
+
+      expect(mockPrismaService.earningsRecord.create).toHaveBeenCalledWith({
+        data: {
+          creatorId: 'creator-uuid',
+          fanId: 'fan-uuid',
+          tierId: 'tier-uuid',
+          amount: 25,
+          fee: 0,
+          netAmount: 25,
+        },
+      });
+      expect(result.amount).toBe(25);
+      expect(result.fee).toBe(0);
+      expect(result.netAmount).toBe(25);
+    });
+
+    it('GET earnings returns paginated results for the owning creator', async () => {
+      const result = await service.getEarningsHistory('user-uuid', { page: 1, limit: 20 });
+
+      expect(mockPrismaService.earningsRecord.findMany).toHaveBeenCalledWith({
+        where: { creatorId: 'creator-uuid' },
+        skip: 0,
+        take: 20,
+        orderBy: { createdAt: 'desc' },
+        include: { fan: true, tier: true },
+      });
+      expect(mockPrismaService.earningsRecord.count).toHaveBeenCalledWith({
+        where: { creatorId: 'creator-uuid' },
+      });
+      expect(result).toEqual({ data: mockRecords, total: 2, page: 1, limit: 20 });
+    });
+
+    it('from/to filtering returns only records in range', async () => {
+      const inRangeRecords = [mockRecords[0]];
+      mockPrismaService.earningsRecord.findMany.mockResolvedValue(inRangeRecords);
+      mockPrismaService.earningsRecord.count.mockResolvedValue(1);
+
+      const result = await service.getEarningsHistory('user-uuid', {
+        from: '2026-06-01',
+        to: '2026-06-30',
+        page: 1,
+        limit: 20,
+      });
+
+      expect(mockPrismaService.earningsRecord.findMany).toHaveBeenCalledWith({
+        where: {
+          creatorId: 'creator-uuid',
+          createdAt: {
+            gte: new Date('2026-06-01'),
+            lte: new Date('2026-06-30'),
+          },
+        },
+        skip: 0,
+        take: 20,
+        orderBy: { createdAt: 'desc' },
+        include: { fan: true, tier: true },
+      });
+      expect(result).toEqual({ data: inRangeRecords, total: 1, page: 1, limit: 20 });
+    });
+
+    it('invalid date range (from > to) returns 400', async () => {
+      await expect(
+        service.getEarningsHistory('user-uuid', {
+          from: '2026-06-30',
+          to: '2026-06-01',
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockPrismaService.earningsRecord.findMany).not.toHaveBeenCalled();
     });
   });
 });
