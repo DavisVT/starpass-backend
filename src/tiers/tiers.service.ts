@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Optional,
 } from '@nestjs/common';
+import { ReorderTiersDto } from './dto/reorder-tiers.dto';
 import { PrismaService } from '../common/prisma.service';
 import { CryptoService } from '../common/crypto.service';
 import { CreateTierDto } from './dto/create-tier.dto';
@@ -128,7 +129,7 @@ export class TiersService {
 
     return this.prisma.tier.findMany({
       where: { creatorId: creator.id, active: true },
-      orderBy: { onChainId: 'asc' },
+      orderBy: { sortOrder: 'asc' },
     });
   }
 
@@ -237,7 +238,7 @@ export class TiersService {
     if (creatorId) where.creatorId = creatorId;
 
     const [data, total] = await Promise.all([
-      this.prisma.tier.findMany({ where, skip, take: limit, orderBy: { onChainId: 'asc' } }),
+      this.prisma.tier.findMany({ where, skip, take: limit, orderBy: { sortOrder: 'asc' } }),
       this.prisma.tier.count({ where }),
     ]);
 
@@ -258,6 +259,65 @@ export class TiersService {
     if (!creator) throw new NotFoundException('Creator not found');
 
     return this.findAll(page, limit, creator.id);
+  }
+
+  /**
+   * Reorder tiers for a creator.
+   *
+   * @param creatorId The internal creator UUID (from :id route param, which equals req.user.sub).
+   * @param dto Contains tierIds (onChainIds) in desired display order.
+   * @returns The full updated list of the creator's tiers, sorted by sortOrder ascending.
+   * @throws {BadRequestException} If any tier onChainId does not belong to the creator.
+   * @throws {BadRequestException} If tierIds does not contain exactly all of the creator's tier onChainIds.
+   */
+  async reorderTiers(creatorId: string, dto: ReorderTiersDto) {
+    const { tierIds } = dto;
+
+    // Fetch all tiers belonging to this creator
+    const existingTiers = await this.prisma.tier.findMany({
+      where: { creatorId },
+      select: { id: true, onChainId: true },
+    });
+
+    const existingOnChainIds = existingTiers.map((t) => t.onChainId);
+
+    // Validate: tierIds must have exactly the same set (no extras, no missing, no duplicates)
+    if (tierIds.length !== existingOnChainIds.length) {
+      throw new BadRequestException(
+        'tierIds must include exactly all tier ids for this creator (no missing, no duplicates)',
+      );
+    }
+
+    const uniqueInput = new Set(tierIds);
+    if (uniqueInput.size !== tierIds.length) {
+      throw new BadRequestException('tierIds must not contain duplicates');
+    }
+
+    const existingSet = new Set(existingOnChainIds);
+    for (const id of tierIds) {
+      if (!existingSet.has(id)) {
+        throw new BadRequestException(`Tier id "${id}" does not belong to this creator`);
+      }
+    }
+
+    // Map onChainId → internal id for the updates
+    const onChainToId = new Map(existingTiers.map((t) => [t.onChainId, t.id]));
+
+    // Update sortOrder for each tier in a single transaction
+    await this.prisma.$transaction(
+      tierIds.map((onChainId, index) =>
+        this.prisma.tier.update({
+          where: { id: onChainToId.get(onChainId) },
+          data: { sortOrder: index },
+        }),
+      ),
+    );
+
+    // Return full updated list sorted by sortOrder asc
+    return this.prisma.tier.findMany({
+      where: { creatorId },
+      orderBy: { sortOrder: 'asc' },
+    });
   }
 
   private getPeriodDays(period: string) {
