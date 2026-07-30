@@ -194,6 +194,10 @@ export class CreatorsService {
     const { from, to, page = 1, limit = 20 } = options;
     const skip = (page - 1) * limit;
 
+    if (from && to && new Date(from) > new Date(to)) {
+      throw new BadRequestException('`from` date must not be after `to` date');
+    }
+
     const where: any = { creatorId: creator.id };
     if (from || to) {
       where.createdAt = {};
