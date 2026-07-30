@@ -48,45 +48,38 @@ export class FansService {
     if (!fan) throw new NotFoundException('Fan not found');
 
     if (limit > 50) limit = 50;
-    const skip = (page - 1) * limit;
     const now = new Date();
 
-    // Get all passes (we'll add expired flag)
-    const [passes, total] = await Promise.all([
-      this.prisma.pass.findMany({
-        where: { fanId: fan.id },
-        include: { creator: true, tier: true },
-        orderBy: { expiresAt: 'asc' },
-        skip,
-        take: limit,
-      }),
-      this.prisma.pass.count({ where: { fanId: fan.id } }),
-    ]);
+    // Fetch only active, non-expired passes — never include expired ones
+    const passes = await this.prisma.pass.findMany({
+      where: {
+        fanId: fan.id,
+        active: true,
+        expiresAt: { gt: now },
+      },
+      include: { creator: true, tier: true },
+      orderBy: { expiresAt: 'asc' },
+    });
 
-    // Group passes by creator
-    const creatorMap = new Map();
+    // Group all active passes by creator in application code
+    const creatorMap = new Map<string, { creator: any; passes: any[] }>();
     for (const pass of passes) {
       const creatorId = pass.creatorId;
       if (!creatorMap.has(creatorId)) {
-        creatorMap.set(creatorId, {
-          creator: pass.creator,
-          passes: [],
-        });
+        creatorMap.set(creatorId, { creator: pass.creator, passes: [] });
       }
-      // Add expired flag to pass
-      const passWithExpired = {
-        ...pass,
-        expired: !pass.active || pass.expiresAt <= now,
-      };
-      creatorMap.get(creatorId).passes.push(passWithExpired);
+      creatorMap.get(creatorId)!.passes.push(pass);
     }
 
-    return {
-      data: Array.from(creatorMap.values()),
-      total,
-      page,
-      limit,
-    };
+    // total = distinct creators with at least one active pass
+    const allGroups = Array.from(creatorMap.values());
+    const total = allGroups.length;
+
+    // Paginate over creator groups
+    const skip = (page - 1) * limit;
+    const data = allGroups.slice(skip, skip + limit);
+
+    return { data, total, page, limit };
   }
 
   /**

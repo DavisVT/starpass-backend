@@ -401,14 +401,22 @@ describe('FansService', () => {
   });
 
   describe('getSubscriptions', () => {
-    it('should return active subscriptions for a fan', async () => {
+    it('should return active subscriptions for a fan grouped by creator', async () => {
+      const passWithCreator = {
+        ...mockPass,
+        creatorId: 'creator-1',
+        creator: { id: 'creator-1', displayName: 'Test Creator' },
+        tier: { id: 'tier-1', name: 'VIP' },
+      };
       mockPrismaService.fan.findUnique.mockResolvedValue(mockFan);
-      mockPrismaService.pass.findMany.mockResolvedValue([mockPass]);
+      mockPrismaService.pass.findMany.mockResolvedValue([passWithCreator]);
 
       const result = await service.getSubscriptions(mockFan.stellarAddress);
 
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe(mockPass.id);
+      expect(result.data).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(result.data[0].creator.id).toBe('creator-1');
+      expect(result.data[0].passes).toHaveLength(1);
       expect(mockPrismaService.pass.findMany).toHaveBeenCalledWith({
         where: {
           fanId: mockFan.id,
@@ -426,6 +434,98 @@ describe('FansService', () => {
       await expect(
         service.getSubscriptions('nonexistent-address'),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    // ── four required tests ────────────────────────────────────────────
+
+    it('fan with multiple active passes across multiple creators — correctly grouped by creator', async () => {
+      const creatorA = { id: 'creator-a', displayName: 'Creator A' };
+      const creatorB = { id: 'creator-b', displayName: 'Creator B' };
+      const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+      const passA1 = { ...mockPass, id: 'pass-a1', creatorId: 'creator-a', creator: creatorA, tier: { id: 'tier-1', name: 'Gold' }, active: true, expiresAt: future };
+      const passA2 = { ...mockPass, id: 'pass-a2', creatorId: 'creator-a', creator: creatorA, tier: { id: 'tier-1', name: 'Gold' }, active: true, expiresAt: future };
+      const passB1 = { ...mockPass, id: 'pass-b1', creatorId: 'creator-b', creator: creatorB, tier: { id: 'tier-2', name: 'Silver' }, active: true, expiresAt: future };
+
+      mockPrismaService.fan.findUnique.mockResolvedValue(mockFan);
+      mockPrismaService.pass.findMany.mockResolvedValue([passA1, passA2, passB1]);
+
+      const result = await service.getSubscriptions(mockFan.stellarAddress, 1, 20);
+
+      expect(result.total).toBe(2);
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(20);
+      expect(result.data).toHaveLength(2);
+
+      const groupA = result.data.find((g: any) => g.creator.id === 'creator-a');
+      const groupB = result.data.find((g: any) => g.creator.id === 'creator-b');
+      expect(groupA.passes).toHaveLength(2);
+      expect(groupA.passes.map((p: any) => p.id)).toEqual(expect.arrayContaining(['pass-a1', 'pass-a2']));
+      expect(groupB.passes).toHaveLength(1);
+      expect(groupB.passes[0].id).toBe('pass-b1');
+
+      // No `expired` computed field
+      for (const group of result.data) {
+        for (const pass of group.passes) {
+          expect(pass).not.toHaveProperty('expired');
+        }
+      }
+    });
+
+    it('fan with no passes — returns empty result set with correct pagination shape', async () => {
+      mockPrismaService.fan.findUnique.mockResolvedValue(mockFan);
+      mockPrismaService.pass.findMany.mockResolvedValue([]);
+
+      const result = await service.getSubscriptions(mockFan.stellarAddress, 1, 20);
+
+      expect(result).toEqual({ data: [], total: 0, page: 1, limit: 20 });
+    });
+
+    it('fan with only expired passes — excluded, resulting in empty result set', async () => {
+      mockPrismaService.fan.findUnique.mockResolvedValue(mockFan);
+      // Prisma query filters at DB level — mock returns empty (expired passes never fetched)
+      mockPrismaService.pass.findMany.mockResolvedValue([]);
+
+      const result = await service.getSubscriptions(mockFan.stellarAddress, 1, 20);
+
+      expect(result).toEqual({ data: [], total: 0, page: 1, limit: 20 });
+      expect(mockPrismaService.pass.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ active: true, expiresAt: { gt: expect.any(Date) } }),
+        }),
+      );
+    });
+
+    it('fan with a mix of active and expired passes — only active ones appear, no expired field', async () => {
+      const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const activePass = {
+        ...mockPass,
+        id: 'pass-active',
+        creatorId: 'creator-1',
+        creator: { id: 'creator-1', displayName: 'Test Creator' },
+        tier: { id: 'tier-1', name: 'Gold' },
+        active: true,
+        expiresAt: future,
+      };
+      // Prisma query filters at DB level — only the active pass is returned
+      mockPrismaService.fan.findUnique.mockResolvedValue(mockFan);
+      mockPrismaService.pass.findMany.mockResolvedValue([activePass]);
+
+      const result = await service.getSubscriptions(mockFan.stellarAddress, 1, 20);
+
+      expect(result.total).toBe(1);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].passes[0].id).toBe('pass-active');
+      expect(result.data[0].passes[0]).not.toHaveProperty('expired');
+      expect(mockPrismaService.pass.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            fanId: mockFan.id,
+            active: true,
+            expiresAt: { gt: expect.any(Date) },
+          }),
+        }),
+      );
     });
   });
 
